@@ -17,6 +17,45 @@ This is a proof-of-concept meta-framework for building high-performance, **Go-po
 
 ```mermaid
 graph TD
+  subgraph Client
+    A["Browser"]
+  end
+
+  subgraph Server
+    B["Go Orchestrator (:8080)"]
+    C["Node Renderer (:3001)"]
+    F["Go Server Functions\n(user-app/server/go)"]
+    G["TS Server Functions\n(user-app/server/ts)"]
+  end
+
+  subgraph UserApp
+    D["pages/*.tsx, layout.tsx, components/*"]
+  end
+
+  subgraph NodeRenderer
+    E["hydrate.tsx, importMap.generated.js"]
+  end
+
+  %% Main SSR/SDUI flow
+  A -- "HTTP Request" --> B
+  B -- "POST /render {component, layout, props}" --> C
+  C -- "SSR React HTML + metadata" --> B
+  B -- "HTML + <script>client.js</script> + <script>window.__SSR_PROPS__</script>" --> A
+  C -- "Serves /client.js (hydration bundle)" --> A
+
+  %% File-based routing and hydration
+  D -- "imported by" --> C
+  E -- "hydration logic" --> A
+
+  %% Server function flows
+  B -- "API: /api/go/{fn}" --> F
+  B -- "API: /api/ts/{fn}" --> G
+  F -- "Dynamic Plugin Load" --> B
+  G -- "Node Runner" --> B
+
+  %% UI orchestration
+  B -- "Controls UI structure (Server Driven)" --> C
+=======
     A["Browser"] -- "HTTP Request" --> B["Go Orchestrator (:8080)"]
     B -- "POST /render {component, layout, props}" --> C["Node Renderer (:3001)"]
     C -- "SSR React HTML + metadata" --> B
