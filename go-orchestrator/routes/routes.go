@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -14,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"go-orchestrator/schema"
+	"go-orchestrator/serverfuncs"
 )
 
 const nodeRendererURL = "http://localhost:3001/render"
@@ -84,6 +87,14 @@ func SetupRouter() http.Handler {
 		}
 		http.NotFound(w, r)
 	})
+
+	// API route for Go server functions
+	r.Post("/api/go/{functionName}", handleGoFunction)
+	// API route for TypeScript server functions
+	r.Post("/api/ts/{functionName}", handleTSFunction)
+
+	// New API route for listing all available functions
+	r.Get("/api/functions", handleFunctionList)
 
 	return r
 }
@@ -237,4 +248,81 @@ func fileExists(filename string) bool {
 		return false
 	}
 	return !info.IsDir()
+}
+
+// Stub handler for Go server functions
+func handleGoFunction(w http.ResponseWriter, r *http.Request) {
+	functionName := chi.URLParam(r, "functionName")
+	baseDir := "../user-app"
+	err := serverfuncs.LoadAndCallGoPlugin(baseDir, functionName, w, r)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": err.Error(),
+		})
+	}
+}
+
+// Stub handler for TypeScript server functions
+func handleTSFunction(w http.ResponseWriter, r *http.Request) {
+	functionName := chi.URLParam(r, "functionName")
+
+	// Parse request body
+	var body interface{}
+	if r.Body != nil {
+		defer r.Body.Close()
+		bodyBytes, _ := io.ReadAll(r.Body)
+		if len(bodyBytes) > 0 {
+			_ = json.Unmarshal(bodyBytes, &body)
+		}
+	}
+
+	// Parse query params
+	query := map[string][]string(r.URL.Query())
+
+	// Collect headers
+	headers := map[string][]string(r.Header)
+
+	// Prepare input for the Node.js runner
+	input := map[string]interface{}{
+		"functionName": functionName,
+		"body":         body,
+		"query":        query,
+		"headers":      headers,
+	}
+	inputBytes, _ := json.Marshal(input)
+
+	cmd := exec.Command("node", "../node-renderer/ts-function-runner.js")
+	cmd.Stdin = bytes.NewReader(inputBytes)
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+
+	err := cmd.Run()
+	output := outBuf.Bytes()
+	if len(output) == 0 {
+		output = errBuf.Bytes()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(output)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(output)
+}
+
+func handleFunctionList(w http.ResponseWriter, r *http.Request) {
+	baseDir := "../user-app"
+	funcs, err := serverfuncs.DiscoverServerFunctions(baseDir)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(funcs)
 }

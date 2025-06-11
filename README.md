@@ -25,7 +25,23 @@ graph TD
     D["user-app/pages/*.tsx, layout.tsx, components/*"] -- "imported by" --> C
     E["node-renderer/hydrate.tsx, importMap.generated.js"] -- "hydration logic" --> A
     B -- "Controls UI structure (Server Driven)" --> C
+    B -- "API: /api/go/{fn}" --> F[Go Server Functions (plugins in user-app/server/go)]
+    B -- "API: /api/ts/{fn}" --> G[TS Server Functions (user-app/server/ts)]
+    F -- "Dynamic Plugin Load" --> B
+    G -- "Node Runner" --> B
 ```
+
+## 2a. Server Function System
+
+This framework supports polyglot server functions:
+- **Go server functions**: Place `.go` files in `user-app/server/go`. These are built as Go plugins (`.so` files) and hot-reloaded automatically in development. The orchestrator loads and executes them dynamically for `/api/go/{functionName}` requests.
+- **TypeScript server functions**: Place `.ts` files in `user-app/server/ts`. These are loaded and executed dynamically by a Node.js runner for `/api/ts/{functionName}` requests. No build step is needed for TypeScript functions.
+- **Automation**: The dev workflow automatically watches and rebuilds Go plugins, and all server function changes are picked up instantly without restarting the orchestrator.
+
+### Example Usage
+- Add a Go function: `user-app/server/go/hello.go` (exports a `Handler` function)
+- Add a TypeScript function: `user-app/server/ts/hello.ts` (exports a default async function)
+- Call them from the frontend or via `/api/go/hello` and `/api/ts/hello`
 
 ## 3. How the Server-Driven UI Schema Works
 
