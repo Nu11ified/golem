@@ -1,0 +1,25 @@
+# Node
+node_modules/
+
+# Build outputs
+**/dist/
+**/build/
+**/out/
+
+# Go binaries
+/go-orchestrator/server
+
+# Logs
+*.log
+
+# OS/Editor
+.DS_Store
+.env
+.idea/
+.vscode/
+
+# TypeScript
+*.tsbuildinfo
+
+# Misc
+pnpm-lock.yaml 
