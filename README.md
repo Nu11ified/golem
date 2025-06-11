@@ -59,7 +59,45 @@ This framework implements a **platform-agnostic, server-driven UI** using a JSON
    ```
 3. The client renders the UI using its own primitives (React, React Native, etc.), using the generated types for safety.
 
-## 4. Generating TypeScript Types from the UI Schema
+## 4. Who Uses Server-Driven UI? (Industry Adoption & References)
+
+Server-Driven UI (SDUI) is used by many leading tech companies to enable rapid iteration, cross-platform consistency, and dynamic feature rollout. Here are some notable examples:
+
+### Lyft
+- **Why:** To manage business complexity, increase release velocity, and support highly configurable, market-specific experiences in their Bikes & Scooters and Rideshare apps.
+- **How:** Uses a "Backend for Frontend" (BFF) microservice to deliver UI schemas and actions to clients, with both declarative and semantic components.
+- **Reference:** [The Journey to Server Driven UI At Lyft Bikes and Scooters (Lyft Engineering Blog)](https://eng.lyft.com/the-journey-to-server-driven-ui-at-lyft-bikes-and-scooters-c19264a0378e)
+
+### Airbnb
+- **Why:** To enable A/B testing, rapid UI changes, and consistent experiences across platforms without requiring app store releases.
+- **How:** Uses SDUI for parts of their mobile app, sending UI schemas from the server to the client for rendering.
+- **Reference:** [Judo: What is Server-Driven UI?](https://www.judo.app/blog/server-driven-ui)
+
+### Shopify
+- **Why:** For dynamic onboarding and flows in their mobile apps, allowing instant updates and experiments.
+- **How:** Uses SDUI to deliver onboarding screens and other flows as server-defined schemas.
+- **Reference:** [Unlocking the Power of Server-Driven UI (Medium)](https://medium.com/@dimakoua/unlocking-the-power-of-server-driven-ui-building-dynamic-configurable-apps-16a9f5bdf95a)
+
+### Judo
+- **Why:** Provides a commercial SDUI solution for mobile teams, enabling real-time UI updates and feature rollouts.
+- **How:** Offers an SDK and platform for building and rendering server-driven UIs in native apps.
+- **Reference:** [Judo: What is Server-Driven UI?](https://www.judo.app/blog/server-driven-ui)
+
+---
+
+**Why do these companies use SDUI?**
+- **Faster iteration:** UI changes can be made server-side and instantly reflected in all clients.
+- **A/B testing:** Easily test different UI layouts or flows without new app releases.
+- **Consistency:** Ensure all platforms show the same UI, reducing fragmentation.
+- **Feature rollout:** Roll out new features or UI changes to all users at once, or segment by user group.
+- **Reduced release cycle pain:** No need to wait for app store approvals for UI changes.
+
+**References:**
+- [The Journey to Server Driven UI At Lyft Bikes and Scooters (Lyft Engineering Blog)](https://eng.lyft.com/the-journey-to-server-driven-ui-at-lyft-bikes-and-scooters-c19264a0378e)
+- [Judo: What is Server-Driven UI?](https://www.judo.app/blog/server-driven-ui)
+- [Unlocking the Power of Server-Driven UI (Medium)](https://medium.com/@dimakoua/unlocking-the-power-of-server-driven-ui-building-dynamic-configurable-apps-16a9f5bdf95a)
+
+## 5. Generating TypeScript Types from the UI Schema
 
 To ensure type safety and a great developer experience, you can generate TypeScript types from the platform-agnostic UI schema using [quicktype](https://quicktype.io).
 
@@ -134,7 +172,7 @@ But for most users, the provided scripts using `npx quicktype` should work out o
 
 ---
 
-## 5. Getting Started
+## 6. Getting Started
 
 ### Prerequisites
 - [Go](https://golang.org/) (v1.20+)
@@ -171,7 +209,7 @@ Open [http://localhost:8080](http://localhost:8080) in your browser.
 
 ---
 
-## 6. Features
+## 7. Features
 
 ### 🗂️ File-Based Routing
 - Any `.tsx` file in `user-app/pages/` becomes a route (including nested folders).
@@ -208,7 +246,7 @@ Open [http://localhost:8080](http://localhost:8080) in your browser.
 
 ---
 
-## 7. Example: Layout, Metadata, and Component Usage
+## 8. Example: Layout, Metadata, and Component Usage
 
 **user-app/pages/layout.tsx**
 ```tsx
@@ -267,7 +305,7 @@ export default function HomePage({ frameworkName }: { frameworkName: string }) {
 
 ---
 
-## 8. Current Limitations
+## 9. Current Limitations
 - **No true HMR (Hot Module Replacement):** The client bundle is rebuilt and you must refresh the browser to see changes.
 - **No dynamic data fetching conventions:** Props are static in the orchestrator; no API/data layer yet.
 - **No error overlays or dev tools.**
@@ -278,7 +316,7 @@ export default function HomePage({ frameworkName }: { frameworkName: string }) {
 
 ---
 
-## 9. How to Contribute
+## 10. How to Contribute
 
 1. **Fork this repo and clone your fork.**
 2. **Create a new branch for your feature or fix.**
@@ -292,7 +330,7 @@ export default function HomePage({ frameworkName }: { frameworkName: string }) {
 
 ---
 
-## 10. Project Structure
+## 11. Project Structure
 
 ```
 my-go-framework/
@@ -313,7 +351,7 @@ my-go-framework/
 
 ---
 
-## 11. FAQ
+## 12. FAQ
 
 **Q: Where do I write my app code?**
 - Only in `user-app/pages/`, `user-app/components/`, or `user-app/public/`. Everything else is handled for you.
@@ -338,6 +376,6 @@ my-go-framework/
 
 ---
 
-## 12. License
+## 13. License
 
 Mozilla Public License 2.0
