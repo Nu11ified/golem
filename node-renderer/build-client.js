@@ -1,12 +1,13 @@
 const esbuild = require('esbuild');
 const path = require('path');
 
-const entry = path.join(__dirname, '../user-app/pages/index.hydrate.tsx');
+const entry = 'hydrate.tsx';
 const outfile = path.join(__dirname, 'dist', 'client.js');
 
 const isWatch = process.argv.includes('--watch') || process.env.NODE_ENV !== 'production';
 
 const buildOptions = {
+  absWorkingDir: __dirname,
   entryPoints: [entry],
   bundle: true,
   outfile,

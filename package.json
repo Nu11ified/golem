@@ -14,11 +14,11 @@
     "node:watch": "pnpm --filter node-renderer dev:client",
     "node:start": "pnpm --filter node-renderer start",
     "dev:go": "cd go-orchestrator && go run main.go",
-    "dev": "run-p dev:node dev:go",
+    "dev": "pnpm --filter node-renderer generate:import-map && run-p dev:node dev:go",
 
     "build:client": "pnpm --filter node-renderer build:client",
     "build:go": "cd go-orchestrator && go build -o server main.go",
-    "build": "run-s build:client build:go",
+    "build": "pnpm --filter node-renderer generate:import-map && run-s build:client build:go",
 
     "start:node": "pnpm --filter node-renderer start",
     "start:go": "cd go-orchestrator && ./server",

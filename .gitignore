@@ -26,3 +26,5 @@ bin/
 
 # Misc
 pnpm-lock.yaml 
+
+importMap.generated.js

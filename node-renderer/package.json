@@ -5,8 +5,9 @@
   "main": "renderer.ts",
   "scripts": {
     "start": "ts-node-dev renderer.ts",
-    "build:client": "NODE_ENV=production node build-client.js",
-    "dev:client": "NODE_ENV=development node build-client.js --watch"
+    "generate:import-map": "node generate-import-map.js",
+    "build:client": "pnpm generate:import-map && NODE_ENV=production node build-client.js",
+    "dev:client": "pnpm generate:import-map && NODE_ENV=development node build-client.js --watch"
   },
   "dependencies": {
     "express": "^4.18.2",
