@@ -6,6 +6,9 @@ node_modules/
 **/build/
 **/out/
 
+# Binaries
+bin/
+
 # Go binaries
 /go-orchestrator/server
 
