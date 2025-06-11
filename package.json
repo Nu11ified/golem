@@ -11,18 +11,17 @@
     "npm-run-all": "^4.1.5"
   },
   "scripts": {
+    "generate:types": "tsc --project tsconfig.json --emitDeclarationOnly",
+    "generate:import-map": "node scripts/generate-import-map.js",
     "dev:node": "run-p --race node:watch node:start",
     "node:watch": "pnpm --filter node-renderer dev:client",
     "node:start": "pnpm --filter node-renderer start",
     "dev:go": "cd go-orchestrator && go run main.go",
-    "dev": "pnpm --filter user-app run generate:types && pnpm --filter node-renderer generate:import-map && run-p dev:node dev:go",
+    "watch:go-plugins": "cd go-orchestrator && go run ./watch-plugins",
+    "build:go-plugins": "cd go-orchestrator && go run ./build-plugins",
     "build:client": "pnpm --filter node-renderer build:client",
     "build:go": "cd go-orchestrator && go build -o server main.go",
-    "build": "pnpm --filter user-app run generate:types && pnpm --filter node-renderer generate:import-map && run-s build:client build:go",
-    "start:node": "pnpm --filter node-renderer start",
-    "start:go": "cd go-orchestrator && ./server",
-    "start": "run-p start:node start:go",
-    "install:go": "mkdir -p bin && cd go-orchestrator && go build -o ../bin/go-orchestrator",
-    "postinstall": "pnpm install:go"
+    "dev": "pnpm --filter user-app run generate:types && pnpm --filter node-renderer generate:import-map && pnpm run watch:go-plugins & run-p dev:node dev:go",
+    "build": "pnpm --filter user-app run generate:types && pnpm --filter node-renderer generate:import-map && pnpm run build:go-plugins && run-s build:client build:go"
   }
 }
