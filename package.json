@@ -7,6 +7,7 @@
     "node-renderer"
   ],
   "devDependencies": {
+    "json-schema-to-typescript": "^15.0.4",
     "npm-run-all": "^4.1.5"
   },
   "scripts": {
@@ -14,17 +15,14 @@
     "node:watch": "pnpm --filter node-renderer dev:client",
     "node:start": "pnpm --filter node-renderer start",
     "dev:go": "cd go-orchestrator && go run main.go",
-    "dev": "pnpm --filter node-renderer generate:import-map && run-p dev:node dev:go",
-
+    "dev": "pnpm --filter user-app run generate:types && pnpm --filter node-renderer generate:import-map && run-p dev:node dev:go",
     "build:client": "pnpm --filter node-renderer build:client",
     "build:go": "cd go-orchestrator && go build -o server main.go",
-    "build": "pnpm --filter node-renderer generate:import-map && run-s build:client build:go",
-
+    "build": "pnpm --filter user-app run generate:types && pnpm --filter node-renderer generate:import-map && run-s build:client build:go",
     "start:node": "pnpm --filter node-renderer start",
     "start:go": "cd go-orchestrator && ./server",
     "start": "run-p start:node start:go",
-
     "install:go": "mkdir -p bin && cd go-orchestrator && go build -o ../bin/go-orchestrator",
     "postinstall": "pnpm install:go"
   }
-} 
+}

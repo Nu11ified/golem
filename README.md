@@ -2,8 +2,9 @@
 
 ## 1. What is this project? (Goals)
 
-This is a proof-of-concept meta-framework for building high-performance, server-side rendered (SSR) React applications using a Go backend as the orchestrator and a Node.js process for React SSR. The goal is to:
-- Provide a modern SSR React stack with Go as the public-facing server.
+This is a proof-of-concept meta-framework for building high-performance, **Go-powered Server Driven UI (SDUI)** React applications. The server (Go) is in full control of the UI, orchestrating which components and layouts are rendered, and delivering pre-rendered HTML to the browser for hydration. The goals are:
+- Provide a modern SSR React stack with Go as the public-facing server and orchestrator.
+- Enable true server-driven UI: the server determines the UI structure and content for every route.
 - Hide all build and hydration complexity from the user—users only write React components, layouts, and static assets in `user-app/`.
 - All SSR/hydration logic (including the hydration entry point and import map) lives in `node-renderer/` for clean separation.
 - Enable fast development and production workflows with a single command for each.
@@ -12,22 +13,128 @@ This is a proof-of-concept meta-framework for building high-performance, server-
 
 ---
 
-## 2. Architecture Diagram
+## 2. Architecture Diagram: Go-Powered Server Driven UI
 
 ```mermaid
 graph TD
-    A[Browser] -- HTTP --> B(Go Orchestrator :8080)
-    B -- POST /render {component, layout, props} --> C(Node Renderer :3001)
-    C -- SSR HTML + metadata --> B
-    B -- HTML + <script>client.js</script> + <script>window.__SSR_PROPS__</script> --> A
-    C -- Serves /client.js --> A
-    D[user-app/pages/*.tsx, layout.tsx, components/*] -- imported by --> C
-    E[node-renderer/hydrate.tsx, importMap.generated.js] -- hydration logic --> A
+    A["Browser"] -- "HTTP Request" --> B["Go Orchestrator (:8080)"]
+    B -- "POST /render {component, layout, props}" --> C["Node Renderer (:3001)"]
+    C -- "SSR React HTML + metadata" --> B
+    B -- "HTML + <script>client.js</script> + <script>window.__SSR_PROPS__</script>" --> A
+    C -- "Serves /client.js (hydration bundle)" --> A
+    D["user-app/pages/*.tsx, layout.tsx, components/*"] -- "imported by" --> C
+    E["node-renderer/hydrate.tsx, importMap.generated.js"] -- "hydration logic" --> A
+    B -- "Controls UI structure (Server Driven)" --> C
 ```
+
+## 3. How the Server-Driven UI Schema Works
+
+This framework implements a **platform-agnostic, server-driven UI** using a JSON Schema-based approach:
+
+- The Go server exposes two key endpoints:
+  - **`/ui-schema`**: Serves the platform-agnostic UI schema as JSON Schema. This schema defines all possible UI primitives (Screen, Text, Button, Input, List, etc.) and their properties.
+  - **`/ui`**: Serves a sample UI data object that matches the schema. This represents the actual UI to be rendered for a given route or user.
+
+- **Any client** (web, mobile, desktop, etc.) can:
+  1. **Fetch the schema** from `/ui-schema` and generate TypeScript (or other language) types for type-safe UI rendering.
+  2. **Fetch the UI data** from `/ui` (or a similar endpoint for real apps) and render the UI using their platform's native components, following the schema.
+
+- This enables you to:
+  - Update UI and flows from the server without redeploying clients.
+  - Share a single source of truth for UI structure across all platforms.
+  - Achieve true server-driven UI for any device that can parse JSON and render UI.
+
+**Example Flow:**
+1. The client fetches `/ui-schema` and generates types.
+2. The client fetches `/ui` and receives a UI description like:
+   ```json
+   {
+     "type": "Screen",
+     "props": { "title": "Welcome" },
+     "children": [
+       { "type": "Text", "props": { "value": "Hello, user!" } },
+       { "type": "Button", "props": { "label": "Click me", "action": "doSomething" } }
+     ]
+   }
+   ```
+3. The client renders the UI using its own primitives (React, React Native, etc.), using the generated types for safety.
+
+## 4. Generating TypeScript Types from the UI Schema
+
+To ensure type safety and a great developer experience, you can generate TypeScript types from the platform-agnostic UI schema using [quicktype](https://quicktype.io).
+
+### One-time Type Generation
+
+Run:
+```sh
+pnpm --filter user-app run generate:types
+```
+This will generate `user-app/ui-schema.d.ts` from `user-app/ui-schema.json`.
+
+### Watch for Changes
+
+To automatically regenerate types whenever you edit `ui-schema.json`, run:
+```sh
+pnpm --filter user-app run watch:types
+```
+
+### Sample TypeScript Usage
+
+After generating, you can use the types in your app:
+
+```typescript
+import { Screen } from './ui-schema';
+
+function renderUI(screen: Screen) {
+  return (
+    <div>
+      <h1>{screen.props.title}</h1>
+      {screen.children?.map((child, idx) => {
+        switch (child.type) {
+          case 'Text':
+            return <p key={idx}>{child.props.value}</p>;
+          case 'Button':
+            return <button key={idx} onClick={() => handleAction(child.props.action)}>{child.props.label}</button>;
+          case 'Input':
+            return <input key={idx} name={child.props.name} type={child.props.inputType} placeholder={child.props.label} />;
+          case 'List':
+            return (
+              <ul key={idx}>
+                {child.props.items.map((item: string, i: number) => <li key={i}>{item}</li>)}
+              </ul>
+            );
+          default:
+            return null;
+        }
+      })}
+    </div>
+  );
+}
+
+function handleAction(action: string) {
+  alert(`Action: ${action}`);
+}
+```
+
+### Troubleshooting
+
+If you see an error like `command not found: quicktype`, make sure you are using the scripts with `npx` (as in the provided scripts). If you have network issues, you can install quicktype globally:
+
+```sh
+npm install -g quicktype
+```
+
+and then run:
+
+```sh
+quicktype -s schema ui-schema.json -o ui-schema.d.ts
+```
+
+But for most users, the provided scripts using `npx quicktype` should work out of the box.
 
 ---
 
-## 3. Getting Started
+## 5. Getting Started
 
 ### Prerequisites
 - [Go](https://golang.org/) (v1.20+)
@@ -64,7 +171,7 @@ Open [http://localhost:8080](http://localhost:8080) in your browser.
 
 ---
 
-## 4. Features
+## 6. Features
 
 ### 🗂️ File-Based Routing
 - Any `.tsx` file in `user-app/pages/` becomes a route (including nested folders).
@@ -101,7 +208,7 @@ Open [http://localhost:8080](http://localhost:8080) in your browser.
 
 ---
 
-## 5. Example: Layout, Metadata, and Component Usage
+## 7. Example: Layout, Metadata, and Component Usage
 
 **user-app/pages/layout.tsx**
 ```tsx
@@ -160,7 +267,7 @@ export default function HomePage({ frameworkName }: { frameworkName: string }) {
 
 ---
 
-## 6. Current Limitations
+## 8. Current Limitations
 - **No true HMR (Hot Module Replacement):** The client bundle is rebuilt and you must refresh the browser to see changes.
 - **No dynamic data fetching conventions:** Props are static in the orchestrator; no API/data layer yet.
 - **No error overlays or dev tools.**
@@ -171,7 +278,7 @@ export default function HomePage({ frameworkName }: { frameworkName: string }) {
 
 ---
 
-## 7. How to Contribute
+## 9. How to Contribute
 
 1. **Fork this repo and clone your fork.**
 2. **Create a new branch for your feature or fix.**
@@ -185,7 +292,7 @@ export default function HomePage({ frameworkName }: { frameworkName: string }) {
 
 ---
 
-## 8. Project Structure
+## 10. Project Structure
 
 ```
 my-go-framework/
@@ -206,7 +313,7 @@ my-go-framework/
 
 ---
 
-## 9. FAQ
+## 11. FAQ
 
 **Q: Where do I write my app code?**
 - Only in `user-app/pages/`, `user-app/components/`, or `user-app/public/`. Everything else is handled for you.
@@ -231,6 +338,6 @@ my-go-framework/
 
 ---
 
-## 10. License
+## 12. License
 
 Mozilla Public License 2.0

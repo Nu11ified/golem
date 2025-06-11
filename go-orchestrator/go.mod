@@ -1,4 +1,4 @@
-module my-go-framework/go-orchestrator
+module go-orchestrator
 
 go 1.20
 

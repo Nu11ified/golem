@@ -1,0 +1,104 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Platform Agnostic UI Schema",
+    "type": "object",
+    "oneOf": [
+      { "$ref": "#/$defs/Screen" },
+      { "$ref": "#/$defs/Text" },
+      { "$ref": "#/$defs/Button" },
+      { "$ref": "#/$defs/Input" },
+      { "$ref": "#/$defs/List" }
+    ],
+    "$defs": {
+      "Screen": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "Screen" },
+          "props": {
+            "type": "object",
+            "properties": {
+              "title": { "type": "string" }
+            },
+            "required": ["title"],
+            "additionalProperties": true
+          },
+          "children": {
+            "type": "array",
+            "items": { "$ref": "#" }
+          }
+        },
+        "required": ["type", "props"],
+        "additionalProperties": false
+      },
+      "Text": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "Text" },
+          "props": {
+            "type": "object",
+            "properties": {
+              "value": { "type": "string" }
+            },
+            "required": ["value"],
+            "additionalProperties": true
+          }
+        },
+        "required": ["type", "props"],
+        "additionalProperties": false
+      },
+      "Button": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "Button" },
+          "props": {
+            "type": "object",
+            "properties": {
+              "label": { "type": "string" },
+              "action": { "type": "string" }
+            },
+            "required": ["label", "action"],
+            "additionalProperties": true
+          }
+        },
+        "required": ["type", "props"],
+        "additionalProperties": false
+      },
+      "Input": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "Input" },
+          "props": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "label": { "type": "string" },
+              "inputType": { "type": "string" }
+            },
+            "required": ["name", "label", "inputType"],
+            "additionalProperties": true
+          }
+        },
+        "required": ["type", "props"],
+        "additionalProperties": false
+      },
+      "List": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "List" },
+          "props": {
+            "type": "object",
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            },
+            "required": ["items"],
+            "additionalProperties": true
+          }
+        },
+        "required": ["type", "props"],
+        "additionalProperties": false
+      }
+    }
+}
