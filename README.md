@@ -17,20 +17,6 @@ This is a proof-of-concept meta-framework for building high-performance, **Go-po
 
 ```mermaid
 graph TD
-<<<<<<< Updated upstream
-    A["Browser"] -- "HTTP Request" --> B["Go Orchestrator (:8080)"]
-    B -- "POST /render {component, layout, props}" --> C["Node Renderer (:3001)"]
-    C -- "SSR React HTML + metadata" --> B
-    B -- "HTML + <script>client.js</script> + <script>window.__SSR_PROPS__</script>" --> A
-    C -- "Serves /client.js (hydration bundle)" --> A
-    D["user-app/pages/*.tsx, layout.tsx, components/*"] -- "imported by" --> C
-    E["node-renderer/hydrate.tsx, importMap.generated.js"] -- "hydration logic" --> A
-    B -- "Controls UI structure (Server Driven)" --> C
-    B -- "API: /api/go/{fn}" --> F[Go Server Functions (plugins in user-app/server/go)]
-    B -- "API: /api/ts/{fn}" --> G[TS Server Functions (user-app/server/ts)]
-    F -- "Dynamic Plugin Load" --> B
-    G -- "Node Runner" --> B
-=======
   subgraph Client
     A["Browser"]
   end
@@ -69,7 +55,6 @@ graph TD
 
   %% UI orchestration
   B -- "Controls UI structure (Server Driven)" --> C
->>>>>>> Stashed changes
 ```
 
 ## 2a. Server Function System
