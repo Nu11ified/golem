@@ -31,7 +31,7 @@ for (const file of files) {
 
 function toMap(arr, type) {
   return arr.map(rel => {
-    return `  '${'pages/' + rel}': () => import('./pages/${rel}'),`;
+    return `  '${'pages/' + rel}': () => import('../user-app/pages/${rel}'),`;
   }).join('\n');
 }
 
