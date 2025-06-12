@@ -276,7 +276,7 @@ func fileExists(filename string) bool {
 // Stub handler for Go server functions
 func handleGoFunction(w http.ResponseWriter, r *http.Request) {
 	functionName := chi.URLParam(r, "functionName")
-	baseDir := "../user-app"
+	baseDir := "user-app"
 	err := serverfuncs.LoadAndCallGoPlugin(baseDir, functionName, w, r)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -316,7 +316,7 @@ func handleTSFunction(w http.ResponseWriter, r *http.Request) {
 	}
 	inputBytes, _ := json.Marshal(input)
 
-	cmd := exec.Command("node", "../node-renderer/ts-function-runner.js")
+	cmd := exec.Command("node", "node-renderer/ts-function-runner.js")
 	cmd.Stdin = bytes.NewReader(inputBytes)
 	var outBuf, errBuf bytes.Buffer
 	cmd.Stdout = &outBuf
@@ -339,7 +339,7 @@ func handleTSFunction(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleFunctionList(w http.ResponseWriter, r *http.Request) {
-	baseDir := "../user-app"
+	baseDir := "user-app"
 	funcs, err := serverfuncs.DiscoverServerFunctions(baseDir)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

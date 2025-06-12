@@ -34,12 +34,20 @@ FROM node:18-slim
 WORKDIR /app
 # Copy Go binary
 COPY --from=go-builder /app/bin/go-orchestrator ./bin/go-orchestrator
+# Copy built Go plugins
+COPY --from=go-builder /app/user-app/server/go ./user-app/server/go
 # Copy built Node renderer/client and user-app
 COPY --from=node-builder /app/user-app ./user-app
 COPY --from=node-builder /app/node-renderer ./node-renderer
 COPY --from=node-builder /app/node_modules ./node_modules
 COPY --from=node-builder /app/package.json ./package.json
 COPY --from=node-builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
+# Copy TypeScript server functions
+COPY --from=node-builder /app/user-app/server/ts ./user-app/server/ts
+# Copy Node renderer function runner
+COPY --from=node-builder /app/node-renderer/ts-function-runner.js ./node-renderer/ts-function-runner.js
+# Copy Node renderer dist (for client.js)
+COPY --from=node-builder /app/node-renderer/dist ./node-renderer/dist
 # Add entrypoint script
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
