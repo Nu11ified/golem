@@ -71,5 +71,7 @@ RUN ls -lR ./user-app/server/ts || true
 # Debug: check ts-node version and list TS server functions
 RUN npx ts-node --version || true
 RUN ls -lR ./user-app/server/ts || true
+# Debug: list compiled TS server function files
+RUN ls -lR ./user-app/dist/ts || true
 # Start both servers
 ENTRYPOINT ["./docker-entrypoint.sh"] 
