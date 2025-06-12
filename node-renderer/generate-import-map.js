@@ -29,21 +29,31 @@ for (const file of files) {
   }
 }
 
-function toMap(arr, type) {
-  return arr.map(rel => {
-    return `  '${'pages/' + rel}': () => import('../user-app/pages/${rel}'),`;
-  }).join('\n');
+function toStaticImports(arr, varName) {
+  return arr.map((rel, i) => `import ${varName}${i} from '../user-app/pages/${rel}';`).join('\n');
 }
 
+function toStaticMap(arr, varName, type) {
+  return arr.map((rel, i) => `  'pages/${rel}': () => Promise.resolve({ default: ${varName}${i} }),`).join('\n');
+}
+
+const pageImports = toStaticImports(pages, 'Page');
+const layoutImports = toStaticImports(layouts, 'Layout');
+const pageMap = toStaticMap(pages, 'Page', 'page');
+const layoutMap = toStaticMap(layouts, 'Layout', 'layout');
+
 const content = `// AUTO-GENERATED FILE. DO NOT EDIT.
+${pageImports}
+${layoutImports}
+
 export const pages = {
-${toMap(pages, 'page')}
+${pageMap}
 };
 
 export const layouts = {
-${toMap(layouts, 'layout')}
+${layoutMap}
 };
 `;
 
 fs.writeFileSync(output, content);
-console.log('Generated importMap.generated.js'); 
+console.log('Generated importMap.generated.js (static imports)'); 
