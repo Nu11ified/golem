@@ -34,6 +34,7 @@ FROM golang:1.21-alpine AS go-plugins-builder
 WORKDIR /app
 COPY user-app ./user-app
 COPY go-orchestrator/build-plugins ./go-orchestrator/build-plugins
+RUN apk add --no-cache build-base
 WORKDIR /app/go-orchestrator
 RUN go run build-plugins/main.go
 
