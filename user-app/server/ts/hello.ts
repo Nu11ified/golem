@@ -7,8 +7,15 @@ export default async function handler({
   query: Record<string, unknown>;
   headers: Record<string, string | string[] | undefined>;
 }) {
-  return {
-    message: "Hello from TypeScript!",
-    received: { body, query, headers }
-  };
+  try {
+    return {
+      message: "Hello from TypeScript!",
+      received: { body, query, headers }
+    };
+  } catch (err: any) {
+    return {
+      error: err?.message || 'Unknown error',
+      stack: err?.stack || null
+    };
+  }
 } 
