@@ -3,6 +3,15 @@
 const path = require('path');
 const fs = require('fs');
 
+process.on('uncaughtException', err => {
+  console.error(JSON.stringify({ error: 'Uncaught Exception', message: err.message, stack: err.stack }));
+  process.exit(1);
+});
+process.on('unhandledRejection', err => {
+  console.error(JSON.stringify({ error: 'Unhandled Rejection', message: err && err.message, stack: err && err.stack }));
+  process.exit(1);
+});
+
 async function main() {
   let input = '';
   process.stdin.setEncoding('utf8');

@@ -1,5 +1,5 @@
 # ----------- Build Go orchestrator -----------
-FROM golang:1.21-alpine AS go-builder
+FROM golang:1.21 AS go-builder
 WORKDIR /app/go-orchestrator
 COPY go-orchestrator/go.mod go-orchestrator/go.sum ./
 RUN go mod download
@@ -7,7 +7,7 @@ COPY go-orchestrator/ .
 RUN go build -o /app/bin/go-orchestrator main.go
 
 # ----------- Build Node renderer/client -----------
-FROM node:18-alpine AS node-builder
+FROM node:18-slim AS node-builder
 WORKDIR /app
 
 # Copy package manager and workspace files first to leverage caching
@@ -30,11 +30,10 @@ RUN pnpm --filter user-app run generate:types && \
     pnpm --filter node-renderer build:client
 
 # ----------- Build Go plugins -----------
-FROM golang:1.21-alpine AS go-plugins-builder
+FROM golang:1.21 AS go-plugins-builder
 WORKDIR /app
 COPY user-app ./user-app
 COPY go-orchestrator/build-plugins ./go-orchestrator/build-plugins
-RUN apk add --no-cache build-base
 WORKDIR /app/go-orchestrator
 RUN go run build-plugins/main.go
 
