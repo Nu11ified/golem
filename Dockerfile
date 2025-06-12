@@ -29,6 +29,13 @@ RUN pnpm --filter user-app run generate:types && \
     pnpm --filter node-renderer generate:import-map && \
     pnpm --filter node-renderer build:client
 
+# ----------- Build Go plugins -----------
+FROM golang:1.21-alpine AS go-plugins-builder
+WORKDIR /app/go-orchestrator
+COPY user-app/server/go ../../user-app/server/go
+COPY go-orchestrator/build-plugins ./build-plugins
+RUN go run build-plugins/main.go
+
 # ----------- Final minimal image -----------
 FROM node:18-slim
 WORKDIR /app
@@ -40,6 +47,10 @@ COPY --from=node-builder /app/node-renderer ./node-renderer
 COPY --from=node-builder /app/node_modules ./node_modules
 COPY --from=node-builder /app/package.json ./package.json
 COPY --from=node-builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
+# Copy Go plugins
+COPY --from=go-plugins-builder /app/user-app/server/go/*.so ./user-app/server/go/
+# Copy TS server functions
+COPY user-app/server/ts ./user-app/server/ts
 # Add entrypoint script
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
@@ -49,5 +60,8 @@ EXPOSE 8080 3001
 # Use non-root user for security
 RUN useradd -m appuser && chown -R appuser /app
 USER appuser
+# Debug: list server function files
+RUN ls -lR ./user-app/server/go || true
+RUN ls -lR ./user-app/server/ts || true
 # Start both servers
 ENTRYPOINT ["./docker-entrypoint.sh"] 

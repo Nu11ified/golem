@@ -292,8 +292,8 @@ func fileExists(filename string) bool {
 // Stub handler for Go server functions
 func handleGoFunction(w http.ResponseWriter, r *http.Request) {
 	functionName := chi.URLParam(r, "functionName")
-	baseDir := "../user-app"
-	err := serverfuncs.LoadAndCallGoPlugin(baseDir, functionName, w, r)
+	base := baseDir + "user-app"
+	err := serverfuncs.LoadAndCallGoPlugin(base, functionName, w, r)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -355,8 +355,8 @@ func handleTSFunction(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleFunctionList(w http.ResponseWriter, r *http.Request) {
-	baseDir := "../user-app"
-	funcs, err := serverfuncs.DiscoverServerFunctions(baseDir)
+	base := baseDir + "user-app"
+	funcs, err := serverfuncs.DiscoverServerFunctions(base)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
