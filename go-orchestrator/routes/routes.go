@@ -49,7 +49,7 @@ type RouteInfo struct {
 var routeMap map[string]RouteInfo
 
 func SetupRouter() http.Handler {
-	routeMap = buildRouteMap("user-app/pages")
+	routeMap = buildRouteMap("../user-app/pages")
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	// Add gziphandler middleware for dynamic responses
@@ -91,7 +91,7 @@ func SetupRouter() http.Handler {
 
 	// Serve static assets from user-app/public if they exist
 	r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
-		publicPath := "user-app/public" + r.URL.Path
+		publicPath := "../user-app/public" + r.URL.Path
 		if fileExists(publicPath) {
 			http.ServeFile(w, r, publicPath)
 			return
@@ -99,13 +99,6 @@ func SetupRouter() http.Handler {
 		// Only SSR if the route exists in routeMap
 		if info, ok := routeMap[r.URL.Path]; ok {
 			handlePageRenderWithLayout(w, r, info)
-			return
-		}
-		// Fallback: if root, serve a default root page
-		if r.URL.Path == "/" {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`<html><head><title>Go/React Framework</title></head><body><h1>Welcome to the Go/React Framework Root Page</h1><p>This is the default root page. Add an index.tsx to user-app/pages/ to customize this route.</p></body></html>`))
 			return
 		}
 		http.NotFound(w, r)
@@ -141,7 +134,7 @@ func buildRouteMap(pagesDir string) map[string]RouteInfo {
 				layoutRel = filepath.ToSlash(layoutRel)
 				layoutRel = "pages/" + layoutRel
 			}
-			pageRel, _ := filepath.Rel("user-app", path)
+			pageRel, _ := filepath.Rel("../user-app", path)
 			pageRel = filepath.ToSlash(pageRel)
 			pageRel = "pages/" + strings.TrimPrefix(pageRel, "pages/")
 			routes[route] = RouteInfo{
@@ -276,7 +269,7 @@ func fileExists(filename string) bool {
 // Stub handler for Go server functions
 func handleGoFunction(w http.ResponseWriter, r *http.Request) {
 	functionName := chi.URLParam(r, "functionName")
-	baseDir := "user-app"
+	baseDir := "../user-app"
 	err := serverfuncs.LoadAndCallGoPlugin(baseDir, functionName, w, r)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -316,7 +309,7 @@ func handleTSFunction(w http.ResponseWriter, r *http.Request) {
 	}
 	inputBytes, _ := json.Marshal(input)
 
-	cmd := exec.Command("node", "node-renderer/ts-function-runner.js")
+	cmd := exec.Command("node", "../node-renderer/ts-function-runner.js")
 	cmd.Stdin = bytes.NewReader(inputBytes)
 	var outBuf, errBuf bytes.Buffer
 	cmd.Stdout = &outBuf
@@ -339,7 +332,7 @@ func handleTSFunction(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleFunctionList(w http.ResponseWriter, r *http.Request) {
-	baseDir := "user-app"
+	baseDir := "../user-app"
 	funcs, err := serverfuncs.DiscoverServerFunctions(baseDir)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
