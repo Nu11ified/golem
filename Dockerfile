@@ -24,10 +24,11 @@ RUN npm install -g pnpm && pnpm install --frozen-lockfile --recursive
 COPY user-app/ ./user-app/
 COPY node-renderer/ ./node-renderer/
 
-# Build the client assets
+# Build the client assets and server functions
 RUN pnpm --filter user-app run generate:types && \
     pnpm --filter node-renderer generate:import-map && \
-    pnpm --filter node-renderer build:client
+    pnpm --filter node-renderer build:client && \
+    pnpm --filter user-app build:server
 
 # ----------- Build Go plugins -----------
 FROM golang:1.21 AS go-plugins-builder
@@ -50,7 +51,9 @@ COPY --from=node-builder /app/package.json ./package.json
 COPY --from=node-builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
 # Copy Go plugins
 COPY --from=go-plugins-builder /app/user-app/server/go/*.so ./user-app/server/go/
-# Copy TS server functions
+# Copy compiled TS server functions
+COPY --from=node-builder /app/user-app/dist/server/ts ./user-app/dist/server/ts
+# Copy TS server functions (for dev mode if needed, and for ts-node to find original sources if it needs them)
 COPY user-app/server/ts ./user-app/server/ts
 # Add entrypoint script
 COPY docker-entrypoint.sh ./docker-entrypoint.sh

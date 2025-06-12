@@ -14,7 +14,8 @@
   },
   "scripts": {
     "generate:types": "npx quicktype -s schema ui-schema.json -o ui-schema.d.ts",
-    "watch:types": "chokidar \"ui-schema.json\" -c \"npx quicktype -s schema ui-schema.json -o ui-schema.d.ts\"",
-    "build": "npm run generate:types && <your-existing-build-command>"
+    "watch:types": "npx quicktype -s schema ui-schema.json -o ui-schema.d.ts --watch",
+    "build": "npm run generate:types && <your-existing-build-command>",
+    "build:server": "tsc -p tsconfig.server.json"
   }
 }

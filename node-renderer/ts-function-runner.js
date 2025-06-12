@@ -27,21 +27,37 @@ async function main() {
   }
 
   const { functionName, body, query, headers } = req;
-  const tsPath = path.resolve(__dirname, '../user-app/server/ts', functionName + '.ts');
-  if (!fs.existsSync(tsPath)) {
-    console.error(JSON.stringify({ error: `Function file not found: ${functionName}.ts` }));
+
+  const isProd = process.env.NODE_ENV === 'production';
+  const extension = isProd ? '.js' : '.ts';
+  const basePath = isProd
+    ? path.resolve(__dirname, '../user-app/dist/server/ts')
+    : path.resolve(__dirname, '../user-app/server/ts');
+  
+  const funcPath = path.join(basePath, functionName + extension);
+
+  if (!fs.existsSync(funcPath)) {
+    console.error(JSON.stringify({ error: `Function file not found: ${funcPath}` }));
     process.exit(1);
   }
 
   try {
-    // Use dynamic import with ts-node support
-    require('ts-node').register();
-    const mod = await import(tsPath);
+    let mod;
+    if (isProd) {
+      mod = require(funcPath);
+    } else {
+      // Use dynamic import with ts-node support for dev
+      require('ts-node').register();
+      mod = await import(funcPath);
+    }
+
     if (typeof mod.default !== 'function') {
       throw new Error('No default export function found');
     }
     const result = await mod.default({ body, query, headers });
-    console.log(JSON.stringify({ result }));
+    // Ensure the result is an object that can be stringified
+    const response = typeof result === 'object' && result !== null ? result : { result };
+    console.log(JSON.stringify(response));
   } catch (err) {
     console.error(JSON.stringify({ error: err.message, stack: err.stack }));
     process.exit(1);
