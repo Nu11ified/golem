@@ -31,7 +31,7 @@ async function main() {
   const isProd = process.env.NODE_ENV === 'production';
   const extension = isProd ? '.js' : '.ts';
   const basePath = isProd
-    ? path.resolve(__dirname, '../user-app/dist/server/ts')
+    ? path.resolve(__dirname, '../user-app/dist/ts')
     : path.resolve(__dirname, '../user-app/server/ts');
   
   const funcPath = path.join(basePath, functionName + extension);
