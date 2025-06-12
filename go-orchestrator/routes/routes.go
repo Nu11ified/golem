@@ -12,8 +12,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/NYTimes/gziphandler"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/lpar/gzipped/v2"
 
 	"go-orchestrator/schema"
 	"go-orchestrator/serverfuncs"
@@ -38,6 +40,8 @@ func SetupRouter() http.Handler {
 	routeMap = buildRouteMap("../user-app/pages")
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
+	// Add gziphandler middleware for dynamic responses
+	r.Use(gziphandler.GzipHandler)
 
 	// Serve the UI schema JSON
 	r.Get("/ui-schema", func(w http.ResponseWriter, r *http.Request) {
@@ -61,9 +65,9 @@ func SetupRouter() http.Handler {
 		json.NewEncoder(w).Encode(ui)
 	})
 
-	// Serve static files (client.js, client.js.map)
-	r.Handle("/client.js", http.FileServer(http.Dir("../node-renderer/dist")))
-	r.Handle("/client.js.map", http.FileServer(http.Dir("../node-renderer/dist")))
+	// Serve static files (client.js, client.js.map) with precompressed support
+	r.Handle("/client.js", gzipped.FileServer(gzipped.Dir("../node-renderer/dist")))
+	r.Handle("/client.js.map", gzipped.FileServer(gzipped.Dir("../node-renderer/dist")))
 
 	// Handle favicon.ico requests with 404
 	r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
@@ -236,7 +240,7 @@ func buildHTMLDocument(content string, props map[string]interface{}, pagePath st
 <body>
     <div id="root">` + content + `</div>
     <script>window.__SSR_PAGE__ = ` + string(pagePathJSON) + `; window.__SSR_LAYOUT__ = ` + string(layoutPathJSON) + `; window.__SSR_PROPS__ = ` + string(propsJSON) + `</script>
-    <script src="/client.js"></script>
+    <script src="/client.js" defer></script>
 </body>
 </html>
 `
