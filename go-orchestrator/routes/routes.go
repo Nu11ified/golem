@@ -101,6 +101,13 @@ func SetupRouter() http.Handler {
 			handlePageRenderWithLayout(w, r, info)
 			return
 		}
+		// Fallback: if root, serve a default root page
+		if r.URL.Path == "/" {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`<html><head><title>Go/React Framework</title></head><body><h1>Welcome to the Go/React Framework Root Page</h1><p>This is the default root page. Add an index.tsx to user-app/pages/ to customize this route.</p></body></html>`))
+			return
+		}
 		http.NotFound(w, r)
 	})
 
