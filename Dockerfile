@@ -64,5 +64,8 @@ USER appuser
 # Debug: list server function files
 RUN ls -lR ./user-app/server/go || true
 RUN ls -lR ./user-app/server/ts || true
+# Debug: check ts-node version and list TS server functions
+RUN npx ts-node --version || true
+RUN ls -lR ./user-app/server/ts || true
 # Start both servers
 ENTRYPOINT ["./docker-entrypoint.sh"] 
