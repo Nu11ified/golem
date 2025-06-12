@@ -9,12 +9,22 @@ RUN go build -o /app/bin/go-orchestrator main.go
 # ----------- Build Node renderer/client -----------
 FROM node:18-alpine AS node-builder
 WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
-COPY user-app/package.json user-app/
-COPY node-renderer/package.json node-renderer/
+
+# Copy package manager and workspace files first to leverage caching
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+# Copy workspace package.json files
+COPY user-app/package.json ./user-app/
+COPY node-renderer/package.json ./node-renderer/
+
+# Install all dependencies for the workspace
 RUN npm install -g pnpm && pnpm install --frozen-lockfile --recursive
-COPY user-app/ user-app/
-COPY node-renderer/ node-renderer/
+
+# Copy the rest of the source code for node-related projects
+COPY user-app/ ./user-app/
+COPY node-renderer/ ./node-renderer/
+
+# Build the client assets
 RUN pnpm --filter user-app run generate:types && \
     pnpm --filter node-renderer generate:import-map && \
     pnpm --filter node-renderer build:client
