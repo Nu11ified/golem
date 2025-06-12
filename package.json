@@ -25,8 +25,6 @@
     "build": "pnpm --filter user-app run generate:types && pnpm --filter node-renderer generate:import-map && pnpm run build:go-plugins && run-s build:client build:go",
     "start:node": "pnpm --filter node-renderer start",
     "start:go": "cd go-orchestrator && ./server",
-    "start": "run-p start:node start:go",
-    "install:go": "mkdir -p bin && cd go-orchestrator && go build -o ../bin/go-orchestrator",
-    "postinstall": "pnpm install:go"
+    "start": "run-p start:node start:go"
   }
 }
