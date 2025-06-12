@@ -1,6 +1,6 @@
 # ----------- Build Go orchestrator -----------
-FROM golang:1.21-alpine AS go-builder
-RUN apk add --no-cache build-base
+FROM golang:1.21-bullseye AS go-builder
+RUN apt-get update && apt-get install -y build-essential
 WORKDIR /app/go-orchestrator
 COPY go-orchestrator/go.mod go-orchestrator/go.sum ./
 RUN go mod download
