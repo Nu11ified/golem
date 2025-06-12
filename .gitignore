@@ -25,6 +25,4 @@ bin/
 *.tsbuildinfo
 
 # Misc
-pnpm-lock.yaml 
-
 importMap.generated.js
