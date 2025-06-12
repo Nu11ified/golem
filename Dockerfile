@@ -12,7 +12,7 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
 COPY user-app/package.json user-app/
 COPY node-renderer/package.json node-renderer/
-RUN npm install -g pnpm && pnpm install --frozen-lockfile
+RUN npm install -g pnpm && pnpm install --frozen-lockfile --recursive
 COPY user-app/ user-app/
 COPY node-renderer/ node-renderer/
 RUN pnpm --filter user-app run generate:types && \
