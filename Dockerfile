@@ -1,5 +1,6 @@
 # ----------- Build Go orchestrator -----------
 FROM golang:1.21-alpine AS go-builder
+RUN apk add --no-cache build-base
 WORKDIR /app/go-orchestrator
 COPY go-orchestrator/go.mod go-orchestrator/go.sum ./
 RUN go mod download
