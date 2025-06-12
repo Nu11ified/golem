@@ -136,6 +136,7 @@ func buildRouteMap(pagesDir string) map[string]RouteInfo {
 		}
 		if filepath.Ext(path) == ".tsx" && !strings.HasSuffix(path, "layout.tsx") {
 			rel, _ := filepath.Rel(pagesDir, path)
+			rel = filepath.ToSlash(rel)
 			route := "/" + strings.TrimSuffix(rel, ".tsx")
 			if route == "/index" {
 				route = "/"
@@ -157,6 +158,15 @@ func buildRouteMap(pagesDir string) map[string]RouteInfo {
 		}
 		return nil
 	})
+	// Ensure root route '/' always maps to 'pages/index.tsx' if it exists
+	if info, ok := routes["/"]; ok {
+		info.PagePath = "pages/index.tsx"
+		routes["/"] = info
+	}
+	// Debug print for verification
+	for k, v := range routes {
+		fmt.Printf("ROUTE MAP: %s -> %s\n", k, v.PagePath)
+	}
 	return routes
 }
 
