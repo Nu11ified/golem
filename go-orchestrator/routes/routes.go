@@ -21,7 +21,19 @@ import (
 	"go-orchestrator/serverfuncs"
 )
 
-const nodeRendererURL = "http://localhost:3001/render"
+var nodeRendererURL = getNodeRendererURL()
+
+func getNodeRendererURL() string {
+	host := os.Getenv("NODE_RENDERER_HOST")
+	if host == "" {
+		host = "localhost"
+	}
+	port := os.Getenv("NODE_PORT")
+	if port == "" {
+		port = "3001"
+	}
+	return fmt.Sprintf("http://%s:%s/render", host, port)
+}
 
 type RenderPayload struct {
 	ComponentPath string                 `json:"componentPath"`

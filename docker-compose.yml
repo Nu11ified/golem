@@ -4,13 +4,17 @@ services:
     build: .
     container_name: go-react-framework
     ports:
-      - "8080:8080"
-      - "3001:3001"
+      - "${GO_PORT:-8080}:8080"
+      - "${NODE_PORT:-3001}:3001"
     volumes:
       - pnpm-store:/app/node_modules/.pnpm-store
     restart: always
     environment:
       - NODE_ENV=production
+      - GO_PORT=${GO_PORT:-8080}
+      - NODE_PORT=${NODE_PORT:-3001}
+    env_file:
+      - .env
     # Uncomment if you want to override entrypoint or pass extra args
     # entrypoint: ["./docker-entrypoint.sh"]
 

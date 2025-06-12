@@ -4,7 +4,7 @@ import ReactDOMServer from 'react-dom/server';
 import path from 'path';
 
 const app = express();
-const port = 3001;
+const port = process.env.NODE_PORT ? parseInt(process.env.NODE_PORT, 10) : 3001;
 
 // Serve the client bundle for hydration
 app.use('/client.js', express.static(path.join(__dirname, 'dist', 'client.js')));

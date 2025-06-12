@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"go-orchestrator/routes"
 	"go-orchestrator/schema"
@@ -17,6 +18,10 @@ func main() {
 	fmt.Println("Example Platform-Agnostic UI Schema:\n", string(schemaJSON))
 
 	r := routes.SetupRouter()
-	log.Println("Go orchestrator listening on http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", r))
+	port := os.Getenv("GO_PORT")
+	if port == "" {
+		port = "8080"
+	}
+	log.Printf("Go orchestrator listening on http://localhost:%s", port)
+	log.Fatal(http.ListenAndServe(":"+port, r))
 }
