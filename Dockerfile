@@ -53,7 +53,7 @@ COPY --from=node-builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
 # Copy Go plugins
 COPY --from=go-plugins-builder /app/user-app/server/go/*.so ./user-app/server/go/
 # Copy compiled TS server functions
-COPY --from=node-builder /app/user-app/dist/server/ts ./user-app/dist/server/ts
+COPY --from=node-builder /app/user-app/dist/ts ./user-app/dist/ts
 # Copy TS server functions (for dev mode if needed, and for ts-node to find original sources if it needs them)
 COPY user-app/server/ts ./user-app/server/ts
 # Add entrypoint script
