@@ -49,7 +49,7 @@ type RouteInfo struct {
 var routeMap map[string]RouteInfo
 
 func SetupRouter() http.Handler {
-	routeMap = buildRouteMap("../user-app/pages")
+	routeMap = buildRouteMap("user-app/pages")
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	// Add gziphandler middleware for dynamic responses
@@ -91,7 +91,7 @@ func SetupRouter() http.Handler {
 
 	// Serve static assets from user-app/public if they exist
 	r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
-		publicPath := "../user-app/public" + r.URL.Path
+		publicPath := "user-app/public" + r.URL.Path
 		if fileExists(publicPath) {
 			http.ServeFile(w, r, publicPath)
 			return
@@ -141,7 +141,7 @@ func buildRouteMap(pagesDir string) map[string]RouteInfo {
 				layoutRel = filepath.ToSlash(layoutRel)
 				layoutRel = "pages/" + layoutRel
 			}
-			pageRel, _ := filepath.Rel("../user-app", path)
+			pageRel, _ := filepath.Rel("user-app", path)
 			pageRel = filepath.ToSlash(pageRel)
 			pageRel = "pages/" + strings.TrimPrefix(pageRel, "pages/")
 			routes[route] = RouteInfo{
