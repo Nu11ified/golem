@@ -31,9 +31,10 @@ RUN pnpm --filter user-app run generate:types && \
 
 # ----------- Build Go plugins -----------
 FROM golang:1.21-alpine AS go-plugins-builder
+WORKDIR /app
+COPY user-app ./user-app
+COPY go-orchestrator/build-plugins ./go-orchestrator/build-plugins
 WORKDIR /app/go-orchestrator
-COPY user-app/server/go ../../user-app/server/go
-COPY go-orchestrator/build-plugins ./build-plugins
 RUN go run build-plugins/main.go
 
 # ----------- Final minimal image -----------
