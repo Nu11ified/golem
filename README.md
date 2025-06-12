@@ -349,7 +349,6 @@ export default function HomePage({ frameworkName }: { frameworkName: string }) {
 
 ## 9. Current Limitations
 - **No true HMR (Hot Module Replacement):** The client bundle is rebuilt and you must refresh the browser to see changes.
-- **No dynamic data fetching conventions:** Props are static in the orchestrator; no API/data layer yet.
 - **No error overlays or dev tools.**
 - **No code splitting or asset optimization.**
 - **No authentication/session support.**
