@@ -43,6 +43,7 @@ COPY --from=node-builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
 # Add entrypoint script
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
+RUN npm install -g pnpm
 # Expose Go and Node ports
 EXPOSE 8080 3001
 # Use non-root user for security
