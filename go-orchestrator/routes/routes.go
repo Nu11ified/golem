@@ -21,6 +21,19 @@ import (
 	"go-orchestrator/serverfuncs"
 )
 
+var baseDir = getBaseDir()
+
+func getBaseDir() string {
+	if dir := os.Getenv("BASE_DIR"); dir != "" {
+		return dir
+	}
+	// Default: use "../" for dev, "./" for Docker/prod
+	if _, err := os.Stat("../user-app/pages"); err == nil {
+		return "../"
+	}
+	return "./"
+}
+
 var nodeRendererURL = getNodeRendererURL()
 
 func getNodeRendererURL() string {
@@ -49,7 +62,7 @@ type RouteInfo struct {
 var routeMap map[string]RouteInfo
 
 func SetupRouter() http.Handler {
-	routeMap = buildRouteMap("../user-app/pages")
+	routeMap = buildRouteMap(baseDir + "user-app/pages")
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	// Add gziphandler middleware for dynamic responses
@@ -78,8 +91,8 @@ func SetupRouter() http.Handler {
 	})
 
 	// Serve static files (client.js, client.js.map) with precompressed support
-	r.Handle("/client.js", gzipped.FileServer(gzipped.Dir("../node-renderer/dist")))
-	r.Handle("/client.js.map", gzipped.FileServer(gzipped.Dir("../node-renderer/dist")))
+	r.Handle("/client.js", gzipped.FileServer(gzipped.Dir(baseDir+"node-renderer/dist")))
+	r.Handle("/client.js.map", gzipped.FileServer(gzipped.Dir(baseDir+"node-renderer/dist")))
 
 	// Handle favicon.ico requests with 404
 	r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
@@ -91,7 +104,7 @@ func SetupRouter() http.Handler {
 
 	// Serve static assets from user-app/public if they exist
 	r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
-		publicPath := "../user-app/public" + r.URL.Path
+		publicPath := baseDir + "user-app/public" + r.URL.Path
 		if fileExists(publicPath) {
 			http.ServeFile(w, r, publicPath)
 			return
