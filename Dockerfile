@@ -4,7 +4,12 @@ WORKDIR /app/go-orchestrator
 COPY go-orchestrator/go.mod go-orchestrator/go.sum ./
 RUN go mod download
 COPY go-orchestrator/ .
+# Copy user-app server functions for plugin build
+COPY user-app/server/go /app/user-app/server/go
+COPY user-app/server/ts /app/user-app/server/ts
 RUN go build -o /app/bin/go-orchestrator main.go
+# Build Go plugins
+RUN go run build-plugins/main.go
 
 # ----------- Build Node renderer/client -----------
 FROM node:18-alpine AS node-builder
