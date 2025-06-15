@@ -33,11 +33,12 @@ app.post('/render', async (req: Request, res: Response) => {
     try {
         // Use transpiled JS files from dist
         const componentJsPath = componentPath.replace(/\\/g, '/').replace(/\.tsx?$/, '.js');
-        const componentFullPath = path.join(__dirname, '..', 'user-app', 'dist', componentJsPath);
+        const userAppDist = path.join(__dirname, '..', 'user-app', 'dist');
+        const componentFullPath = path.join(userAppDist, componentJsPath);
         let layoutFullPath: string | undefined = undefined;
         if (layoutPath) {
             const layoutJsPath = layoutPath.replace(/\\/g, '/').replace(/\.tsx?$/, '.js');
-            layoutFullPath = path.join(__dirname, '..', 'user-app', 'dist', layoutJsPath);
+            layoutFullPath = path.join(userAppDist, layoutJsPath);
         }
 
         // For development: force reload by appending a query param
