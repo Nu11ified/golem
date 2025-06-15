@@ -9,13 +9,14 @@
     "watch:client": "nodemon --watch ../user-app/pages --watch ../user-app/components --watch hydrate.tsx --ext ts,tsx,js --exec \"pnpm generate:import-map && pnpm build:rollup\"",
     "watch:node": "nodemon --watch renderer.ts --exec \"node renderer.ts\"",
     "watch:go": "nodemon --watch ../go-orchestrator --ext go --exec \"cd ../go-orchestrator && go run main.go\"",
-    "build": "pnpm sync:metadata && pnpm generate:import-map && pnpm build:rollup && pnpm clean:client",
-    "start": "node renderer.ts",
+    "build": "pnpm sync:metadata && pnpm generate:import-map && pnpm build:rollup && pnpm build:server && pnpm clean:client",
+    "start": "node dist/renderer.js",
     "start:node": "node renderer.ts",
     "generate:import-map": "node generate-import-map.js",
     "build:rollup": "pnpm generate:import-map && rollup -c rollup.config.js",
     "clean:client": "node clean-client-bundles.js",
-    "sync:metadata": "node scripts/sync-metadata.mjs"
+    "sync:metadata": "node scripts/sync-metadata.mjs",
+    "build:server": "tsc --project tsconfig.json --outDir dist"
   },
   "dependencies": {
     "@rollup/plugin-replace": "^6.0.2",
