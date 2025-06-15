@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,26 +34,19 @@ for (const file of files) {
   }
 }
 
-function toStaticImports(arr, varName) {
-  // Import from dist/pages and use .js extension
-  return arr.map((rel, i) => {
+function toDynamicMap(arr, type) {
+  return arr.map(rel => {
     const jsRel = rel.replace(/\.tsx?$/, '.js');
-    return `import ${varName}${i} from '../user-app/dist/pages/${jsRel}';`;
+    const absPath = path.join(distPagesDir, jsRel);
+    const fileUrl = pathToFileURL(absPath).href;
+    return `  'pages/${rel}': () => import('${fileUrl}'),`;
   }).join('\n');
 }
 
-function toStaticMap(arr, varName, type) {
-  return arr.map((rel, i) => `  'pages/${rel}': () => Promise.resolve({ default: ${varName}${i} }),`).join('\n');
-}
-
-const pageImports = toStaticImports(pages, 'Page');
-const layoutImports = toStaticImports(layouts, 'Layout');
-const pageMap = toStaticMap(pages, 'Page', 'page');
-const layoutMap = toStaticMap(layouts, 'Layout', 'layout');
+const pageMap = toDynamicMap(pages, 'page');
+const layoutMap = toDynamicMap(layouts, 'layout');
 
 const content = `// AUTO-GENERATED FILE. DO NOT EDIT.
-${pageImports}
-${layoutImports}
 
 export const pages = {
 ${pageMap}
@@ -65,4 +58,4 @@ ${layoutMap}
 `;
 
 fs.writeFileSync(output, content);
-console.log('Generated importMap.generated.js (static imports)'); 
+console.log('Generated importMap.generated.js (dynamic imports, file URLs)'); 
