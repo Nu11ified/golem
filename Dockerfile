@@ -27,6 +27,7 @@ COPY node-renderer/ ./node-renderer/
 
 # Build the client assets and server functions
 RUN pnpm --filter user-app run generate:types && \
+    pnpm --filter user-app build:ts && \
     pnpm --filter node-renderer generate:import-map && \
     pnpm --filter node-renderer build:client && \
     pnpm --filter node-renderer build:server && \
