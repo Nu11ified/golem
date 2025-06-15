@@ -23,6 +23,14 @@ bin/
 
 # TypeScript
 *.tsbuildinfo
+user-app/tsconfig.server.tsbuildinfo
 
 # Misc
 importMap.generated.js
+node-renderer/metadata.json
+node-renderer/dist/
+node-renderer/client-manifest.json
+node-renderer/*.js.map
+user-app/dist/
+user-app/ui-schema.json
+user-app/site-metadata.json

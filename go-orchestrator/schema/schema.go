@@ -85,6 +85,6 @@ func GetSampleUI() (map[string]interface{}, error) {
 
 // GetUISchemaJSON returns the raw JSON Schema bytes for the UI schema
 func GetUISchemaJSON() ([]byte, error) {
-	defaultSchemaPath := filepath.Join("..", "user-app", "ui-schema.json")
+	defaultSchemaPath := filepath.Join("..", "node-renderer", "ui-schema.json")
 	return os.ReadFile(defaultSchemaPath)
 }

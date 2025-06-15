@@ -4,17 +4,18 @@
   "description": "Node.js SSR service for Go meta-framework",
   "main": "renderer.ts",
   "scripts": {
-    "dev": "concurrently -k -n USERAPP,ROLLUP,NODE,GO \"pnpm watch:user-app\" \"pnpm watch:client\" \"pnpm watch:node\" \"pnpm watch:go\"",
+    "dev": "pnpm sync:metadata && concurrently -k -n USERAPP,ROLLUP,NODE,GO \"pnpm watch:user-app\" \"pnpm watch:client\" \"pnpm watch:node\" \"pnpm watch:go\"",
     "watch:user-app": "pnpm --filter user-app watch:ts",
     "watch:client": "nodemon --watch ../user-app/pages --watch ../user-app/components --watch hydrate.tsx --ext ts,tsx,js --exec \"pnpm generate:import-map && pnpm build:rollup\"",
     "watch:node": "nodemon --watch renderer.ts --exec \"node renderer.ts\"",
     "watch:go": "nodemon --watch ../go-orchestrator --ext go --exec \"cd ../go-orchestrator && go run main.go\"",
-    "build": "pnpm generate:import-map && pnpm build:rollup && pnpm clean:client",
+    "build": "pnpm sync:metadata && pnpm generate:import-map && pnpm build:rollup && pnpm clean:client",
     "start": "go run ../go-orchestrator/main.go",
     "start:node": "node renderer.ts",
     "generate:import-map": "node generate-import-map.js",
     "build:rollup": "pnpm generate:import-map && rollup -c rollup.config.js",
-    "clean:client": "node clean-client-bundles.js"
+    "clean:client": "node clean-client-bundles.js",
+    "sync:metadata": "node scripts/sync-metadata.mjs"
   },
   "dependencies": {
     "@rollup/plugin-replace": "^6.0.2",

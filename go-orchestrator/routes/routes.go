@@ -69,14 +69,14 @@ var routeMap map[string]RouteInfo
 var siteMetadata = loadSiteMetadata()
 
 func loadSiteMetadata() map[string]interface{} {
-	data, err := ioutil.ReadFile("../node-renderer/metadata.json")
+	data, err := ioutil.ReadFile("../node-renderer/site-metadata.json")
 	if err != nil {
-		fmt.Println("Warning: could not read node-renderer/metadata.json:", err)
+		fmt.Println("Warning: could not read node-renderer/site-metadata.json:", err)
 		return map[string]interface{}{}
 	}
 	var meta map[string]interface{}
 	if err := json.Unmarshal(data, &meta); err != nil {
-		fmt.Println("Warning: could not parse node-renderer/metadata.json:", err)
+		fmt.Println("Warning: could not parse node-renderer/site-metadata.json:", err)
 		return map[string]interface{}{}
 	}
 	return meta

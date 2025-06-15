@@ -5,7 +5,7 @@ import fs from 'fs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Dynamically import the TS file using ts-node/esm loader
-const { default: siteMetadata } = await import(resolve(__dirname, '../site-metadata.ts'));
+const { default: siteMetadata } = await import(resolve(__dirname, '../../user-app/site-metadata.ts'));
 console.log('siteMetadata:', siteMetadata);
 if (!siteMetadata) throw new Error('siteMetadata is undefined!');
 
