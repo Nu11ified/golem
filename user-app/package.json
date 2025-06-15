@@ -17,8 +17,8 @@
     "typescript": "^5.0.2"
   },
   "scripts": {
-    "generate:types": "npx quicktype -s schema ui-schema.json -o ui-schema.d.ts",
-    "watch:types": "npx quicktype -s schema ui-schema.json -o ui-schema.d.ts --watch",
+    "generate:types": "npx quicktype -s schema ../node-renderer/ui-schema.json -o ui-schema.d.ts",
+    "watch:types": "npx quicktype -s schema ../node-renderer/ui-schema.json -o ui-schema.d.ts --watch",
     "build:tailwind": "tailwindcss -i ./pages/globals.css -o ./public/tailwind.css --minify",
     "build:react": "echo 'Add your React build step here'",
     "build:ts": "tsc --project tsconfig.json",
