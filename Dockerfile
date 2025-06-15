@@ -29,6 +29,7 @@ COPY node-renderer/ ./node-renderer/
 RUN pnpm --filter user-app run generate:types && \
     pnpm --filter node-renderer generate:import-map && \
     pnpm --filter node-renderer build:client && \
+    pnpm --filter node-renderer build:server && \
     pnpm --filter user-app build:server
 
 # ----------- Build Go plugins -----------
