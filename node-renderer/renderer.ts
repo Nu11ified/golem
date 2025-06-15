@@ -9,6 +9,8 @@ import type { Request, Response } from 'express';
 import React from 'react';
 import ReactDOMServer from 'react-dom/server';
 
+import { pages, layouts } from './importMap.generated.js';
+
 const app = express();
 const port = process.env.NODE_PORT ? parseInt(process.env.NODE_PORT, 10) : 3001;
 
@@ -31,19 +33,8 @@ app.post('/render', async (req: Request, res: Response) => {
     }
 
     try {
-        // Use transpiled JS files from dist
-        const componentJsPath = componentPath.replace(/\\/g, '/').replace(/\.tsx?$/, '.js');
-        const userAppDist = path.join(__dirname, '..', 'user-app', 'dist');
-        const componentFullPath = path.join(userAppDist, componentJsPath);
-        let layoutFullPath: string | undefined = undefined;
-        if (layoutPath) {
-            const layoutJsPath = layoutPath.replace(/\\/g, '/').replace(/\.tsx?$/, '.js');
-            layoutFullPath = path.join(userAppDist, layoutJsPath);
-        }
-
-        // For development: force reload by appending a query param
-        const componentUrl = pathToFileURL(componentFullPath).href + (process.env.NODE_ENV !== 'production' ? `?update=${Date.now()}` : '');
-        const PageModule = await import(componentUrl);
+        // Use import map for dynamic imports
+        const PageModule = await pages[componentPath]();
         const Page = PageModule.default || PageModule;
         const pageMetadata = PageModule.metadata || {};
 
@@ -53,9 +44,8 @@ app.post('/render', async (req: Request, res: Response) => {
 
         let element: React.ReactElement;
         let layoutMetadata = {};
-        if (layoutFullPath) {
-            const layoutUrl = pathToFileURL(layoutFullPath).href + (process.env.NODE_ENV !== 'production' ? `?update=${Date.now()}` : '');
-            const LayoutModule = await import(layoutUrl);
+        if (layoutPath && layouts[layoutPath]) {
+            const LayoutModule = await layouts[layoutPath]!();
             const Layout = LayoutModule.default || LayoutModule;
             layoutMetadata = LayoutModule.metadata || {};
             if (typeof Layout !== 'function') {
