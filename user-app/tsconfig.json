@@ -9,13 +9,14 @@
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
-    "module": "ESNext",
-    "moduleResolution": "Node",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
+    "noEmit": false,
+    "outDir": "dist",
     "jsx": "react-jsx"
   },
-  "include": ["src", "pages"],
-  "exclude": ["node_modules"]
+  "include": ["src", "pages", "components"],
+  "exclude": ["node_modules", "dist"]
 } 

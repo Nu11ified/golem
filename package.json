@@ -22,10 +22,9 @@
     "build:go-plugins": "cd go-orchestrator && go run ./build-plugins",
     "build:client": "pnpm --filter node-renderer build:client",
     "build:go": "cd go-orchestrator && go build -o server main.go",
-    "dev": "pnpm --filter user-app run generate:types && pnpm --filter node-renderer generate:import-map && pnpm run watch:go-plugins & run-p dev:node dev:go",
-    "build": "pnpm --filter user-app run generate:types && pnpm --filter node-renderer generate:import-map && pnpm run build:go-plugins && run-s build:client build:go",
-    "start:node": "pnpm --filter node-renderer start",
-    "start:go": "cd go-orchestrator && ./server",
-    "start": "run-p start:node start:go"
+    "sync-metadata": "node ./user-app/scripts/sync-metadata.js",
+    "dev": "pnpm --filter node-renderer dev",
+    "build": "pnpm --filter node-renderer build",
+    "start": "pnpm --filter node-renderer start"
   }
 }

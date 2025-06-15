@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/NYTimes/gziphandler"
 	"github.com/go-chi/chi/v5"
@@ -22,6 +23,10 @@ import (
 )
 
 var baseDir = getBaseDir()
+
+func init() {
+	fmt.Println("[GO] baseDir:", baseDir)
+}
 
 func getBaseDir() string {
 	if dir := os.Getenv("BASE_DIR"); dir != "" {
@@ -61,6 +66,22 @@ type RouteInfo struct {
 
 var routeMap map[string]RouteInfo
 
+var siteMetadata = loadSiteMetadata()
+
+func loadSiteMetadata() map[string]interface{} {
+	data, err := ioutil.ReadFile("../node-renderer/metadata.json")
+	if err != nil {
+		fmt.Println("Warning: could not read node-renderer/metadata.json:", err)
+		return map[string]interface{}{}
+	}
+	var meta map[string]interface{}
+	if err := json.Unmarshal(data, &meta); err != nil {
+		fmt.Println("Warning: could not parse node-renderer/metadata.json:", err)
+		return map[string]interface{}{}
+	}
+	return meta
+}
+
 func SetupRouter() http.Handler {
 	routeMap = buildRouteMap(baseDir + "user-app/pages")
 	r := chi.NewRouter()
@@ -93,6 +114,17 @@ func SetupRouter() http.Handler {
 	// Serve static files (client.js, client.js.map) with precompressed support
 	r.Handle("/client.js", gzipped.FileServer(gzipped.Dir(baseDir+"node-renderer/dist")))
 	r.Handle("/client.js.map", gzipped.FileServer(gzipped.Dir(baseDir+"node-renderer/dist")))
+
+	// Serve hashed client bundles with cache-busting in prod, no-cache in dev
+	r.Get(`/client.{hash:[a-zA-Z0-9]+}.js`, func(w http.ResponseWriter, r *http.Request) {
+		if os.Getenv("NODE_ENV") != "production" {
+			w.Header().Set("Cache-Control", "no-store, must-revalidate")
+		} else {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		}
+		filename := "client." + chi.URLParam(r, "hash") + ".js"
+		http.ServeFile(w, r, baseDir+"node-renderer/dist/"+filename)
+	})
 
 	// Handle favicon.ico requests with 404
 	r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
@@ -185,6 +217,7 @@ func findNearestLayout(dir, pagesDir string) string {
 }
 
 func handlePageRenderWithLayout(w http.ResponseWriter, _ *http.Request, info RouteInfo) {
+	start := time.Now()
 	props := map[string]interface{}{
 		"frameworkName": "Go/React",
 	}
@@ -227,9 +260,26 @@ func handlePageRenderWithLayout(w http.ResponseWriter, _ *http.Request, info Rou
 		http.Error(w, fmt.Sprintf("Renderer error: %s", renderResp.Error), http.StatusInternalServerError)
 		return
 	}
+	ssrTimeMs := time.Since(start).Milliseconds()
+	props["ssrTimeMs"] = ssrTimeMs
 	html := buildHTMLDocument(renderResp.HTML, props, info.PagePath, info.LayoutPath, renderResp.Metadata)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(html))
+}
+
+func getClientJsName() string {
+	manifestPath := baseDir + "node-renderer/dist/client-manifest.json"
+	data, err := ioutil.ReadFile(manifestPath)
+	if err != nil {
+		return "client.js" // fallback for dev or error
+	}
+	var manifest struct {
+		ClientJs string `json:"clientJs"`
+	}
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return "client.js"
+	}
+	return manifest.ClientJs
 }
 
 func buildHTMLDocument(content string, props map[string]interface{}, pagePath string, layoutPath string, metadata map[string]interface{}) string {
@@ -237,26 +287,48 @@ func buildHTMLDocument(content string, props map[string]interface{}, pagePath st
 	pagePathJSON, _ := json.Marshal(pagePath)
 	layoutPathJSON, _ := json.Marshal(layoutPath)
 
-	title := "Go/React Framework"
-	description := ""
-	favicon := ""
+	title := siteMetadata["title"]
 	if metadata != nil {
 		if t, ok := metadata["title"].(string); ok {
 			title = t
 		}
+	}
+	description := siteMetadata["description"]
+	if metadata != nil {
 		if d, ok := metadata["description"].(string); ok {
 			description = d
 		}
+	}
+	favicon := siteMetadata["favicon"]
+	if metadata != nil {
 		if f, ok := metadata["favicon"].(string); ok {
 			favicon = f
 		}
 	}
+	ogImage := siteMetadata["ogImage"]
+	keywords := siteMetadata["keywords"]
+	author := siteMetadata["author"]
+	themeColor := siteMetadata["themeColor"]
+	fontUrl := siteMetadata["fontUrl"]
+	fontFamily := siteMetadata["fontFamily"]
 
 	metaTags := ""
-	if description != "" {
+	if description != nil && description != "" {
 		metaTags += fmt.Sprintf("<meta name=\"description\" content=\"%s\">\n", description)
 	}
-	if favicon != "" {
+	if keywords != nil && keywords != "" {
+		metaTags += fmt.Sprintf("<meta name=\"keywords\" content=\"%s\">\n", keywords)
+	}
+	if author != nil && author != "" {
+		metaTags += fmt.Sprintf("<meta name=\"author\" content=\"%s\">\n", author)
+	}
+	if themeColor != nil && themeColor != "" {
+		metaTags += fmt.Sprintf("<meta name=\"theme-color\" content=\"%s\">\n", themeColor)
+	}
+	if ogImage != nil && ogImage != "" {
+		metaTags += fmt.Sprintf("<meta property=\"og:image\" content=\"%s\">\n", ogImage)
+	}
+	if favicon != nil && favicon != "" {
 		metaTags += fmt.Sprintf("<link rel=\"icon\" href=\"%s\">\n", favicon)
 	}
 
@@ -266,16 +338,28 @@ func buildHTMLDocument(content string, props map[string]interface{}, pagePath st
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>` + title + `</title>
+    <title>` + fmt.Sprintf("%v", title) + `</title>
     ` + metaTags + `
+    <link rel="stylesheet" href="/tailwind.css" />
+    ` + func() string {
+		if fontUrl != nil && fontUrl != "" {
+			return `<link rel="stylesheet" href="` + fmt.Sprintf("%v", fontUrl) + `" />`
+		}
+		return ""
+	}() + `
     <style>
-        body { margin: 0; background-color: #282c34; color: white; }
+        :root { --site-font: ` + fmt.Sprintf("%v", fontFamily) + `; }
+        body { margin: 0; font-family: var(--site-font, sans-serif); background: #282c34; color: white; }
     </style>
 </head>
 <body>
     <div id="root">` + content + `</div>
-    <script>window.__SSR_PAGE__ = ` + string(pagePathJSON) + `; window.__SSR_LAYOUT__ = ` + string(layoutPathJSON) + `; window.__SSR_PROPS__ = ` + string(propsJSON) + `</script>
-    <script src="/client.js" defer></script>
+    <script>
+      window.__SSR_PAGE__ = ` + string(pagePathJSON) + `;
+      window.__SSR_LAYOUT__ = ` + string(layoutPathJSON) + `;
+      window.__SSR_PROPS__ = ` + string(propsJSON) + `;
+    </script>
+    <script src="/` + getClientJsName() + `" defer></script>
 </body>
 </html>
 `

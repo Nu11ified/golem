@@ -2,24 +2,24 @@ import React, { useEffect, useState } from "react";
 
 function JsonBlock({ data }: { data: any }) {
   const [open, setOpen] = useState(false);
-  if (data == null) return <span style={{ color: '#aaa' }}>No response</span>;
+  if (data == null) return <span className="text-gray-400">No response</span>;
   return (
-    <div style={{ background: '#181c24', borderRadius: 6, padding: 12, marginTop: 8, fontSize: 14, fontFamily: 'monospace', color: '#e6e6e6', overflowX: 'auto' }}>
+    <div className="bg-gray-900/80 rounded-lg p-3 mt-2 text-sm font-mono text-gray-200 overflow-x-auto shadow-inner border border-gray-700">
       <button
         onClick={() => setOpen(o => !o)}
-        style={{ background: 'none', border: 'none', color: '#61dafb', cursor: 'pointer', fontWeight: 600, marginBottom: 4 }}
+        className="bg-transparent border-none text-cyan-300 cursor-pointer font-semibold mb-2 hover:underline focus:outline-none"
       >
         {open ? '▼ Hide JSON' : '▶ Show JSON'}
       </button>
-      {open && <pre style={{ margin: 0 }}>{JSON.stringify(data, null, 2)}</pre>}
+      {open && <pre className="m-0 whitespace-pre-wrap">{JSON.stringify(data, null, 2)}</pre>}
     </div>
   );
 }
 
 function StatusIcon({ status }: { status: 'success' | 'error' | 'loading' }) {
-  if (status === 'loading') return <span style={{ color: '#61dafb', marginRight: 6 }}>⏳</span>;
-  if (status === 'success') return <span style={{ color: '#4caf50', marginRight: 6 }}>✔️</span>;
-  if (status === 'error') return <span style={{ color: '#f44336', marginRight: 6 }}>❌</span>;
+  if (status === 'loading') return <span className="text-cyan-300 mr-2">⏳</span>;
+  if (status === 'success') return <span className="text-green-400 mr-2">✔️</span>;
+  if (status === 'error') return <span className="text-red-400 mr-2">❌</span>;
   return null;
 }
 
@@ -61,37 +61,29 @@ export default function ServerFunctionDemo() {
   }, []);
 
   return (
-    <div style={{
-      background: "#23272f",
-      color: "#fff",
-      padding: 32,
-      borderRadius: 12,
-      maxWidth: 700,
-      margin: "32px auto 24px auto",
-      boxShadow: "0 4px 24px #0004"
-    }}>
-      <h2 style={{ textAlign: 'center', marginBottom: 24, letterSpacing: 1 }}>
-        <span style={{ color: '#61dafb', marginRight: 8 }}>🧩</span>
+    <div className="bg-gray-900/80 text-white p-8 rounded-2xl max-w-2xl mx-auto shadow-2xl border border-cyan-700">
+      <h2 className="text-2xl font-bold text-center mb-6 tracking-wide text-cyan-200 flex items-center justify-center gap-2">
+        <span className="text-cyan-300">🧩</span>
         Server Function Demo
       </h2>
-      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', justifyContent: 'center' }}>
-        <div style={{ flex: 1, minWidth: 280, background: '#252a33', borderRadius: 8, padding: 20, boxShadow: '0 2px 8px #0002' }}>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+      <div className="flex flex-col md:flex-row gap-6 md:gap-8 justify-center">
+        <div className="flex-1 min-w-[260px] bg-gray-800/80 rounded-xl p-5 shadow-md border border-gray-700">
+          <div className="flex items-center mb-2">
             <StatusIcon status={goStatus} />
-            <span style={{ fontWeight: 600, fontSize: 17 }}>Go Function <span style={{ color: '#90caf9' }}>/api/go/hello</span></span>
+            <span className="font-semibold text-base">Go Function <span className="text-blue-200">/api/go/hello</span></span>
           </div>
           <JsonBlock data={goResult} />
         </div>
-        <div style={{ flex: 1, minWidth: 280, background: '#252a33', borderRadius: 8, padding: 20, boxShadow: '0 2px 8px #0002' }}>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+        <div className="flex-1 min-w-[260px] bg-gray-800/80 rounded-xl p-5 shadow-md border border-gray-700">
+          <div className="flex items-center mb-2">
             <StatusIcon status={tsStatus} />
-            <span style={{ fontWeight: 600, fontSize: 17 }}>TypeScript Function <span style={{ color: '#ffd54f' }}>/api/ts/hello</span></span>
+            <span className="font-semibold text-base">TypeScript Function <span className="text-yellow-200">/api/ts/hello</span></span>
           </div>
           <JsonBlock data={tsResult} />
         </div>
       </div>
-      {error && <p style={{ color: "#f55", marginTop: 24, textAlign: 'center' }}>Error: {error}</p>}
-      <div style={{ textAlign: 'center', marginTop: 32, fontSize: 13, color: '#aaa' }}>
+      {error && <p className="text-red-400 mt-6 text-center">Error: {error}</p>}
+      <div className="text-center mt-8 text-xs text-gray-400">
         <span>🔄 Hot reload supported for both Go and TypeScript server functions.</span>
       </div>
     </div>

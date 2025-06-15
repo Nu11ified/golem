@@ -1,7 +1,12 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const pagesDir = path.join(__dirname, '../user-app/pages');
+const distPagesDir = path.join(__dirname, '../user-app/dist/pages');
 const output = path.join(__dirname, 'importMap.generated.js');
 
 function walk(dir, filelist = []) {
@@ -30,7 +35,11 @@ for (const file of files) {
 }
 
 function toStaticImports(arr, varName) {
-  return arr.map((rel, i) => `import ${varName}${i} from '../user-app/pages/${rel}';`).join('\n');
+  // Import from dist/pages and use .js extension
+  return arr.map((rel, i) => {
+    const jsRel = rel.replace(/\.tsx?$/, '.js');
+    return `import ${varName}${i} from '../user-app/dist/pages/${jsRel}';`;
+  }).join('\n');
 }
 
 function toStaticMap(arr, varName, type) {

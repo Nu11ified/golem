@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "es2019",
-    "module": "commonjs",
+    "module": "esnext",
     "moduleResolution": "node",
     "jsx": "react-jsx",
     "esModuleInterop": true,
@@ -10,5 +10,5 @@
     "skipLibCheck": true,
     "outDir": "./dist"
   },
-  "include": ["renderer.ts"]
+  "include": ["renderer.ts", "hydrate.tsx"]
 } 

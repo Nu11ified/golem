@@ -1,13 +1,19 @@
-import express, { Request, Response } from 'express';
+import { fileURLToPath, pathToFileURL } from 'url';
+import path from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+import express from 'express';
+import type { Request, Response } from 'express';
 import React from 'react';
 import ReactDOMServer from 'react-dom/server';
-import path from 'path';
 
 const app = express();
 const port = process.env.NODE_PORT ? parseInt(process.env.NODE_PORT, 10) : 3001;
 
 // Serve the client bundle for hydration
-app.use('/client.js', express.static(path.join(__dirname, 'dist', 'client.js')));
+app.use(express.static(path.join(__dirname, 'dist')));
 
 app.use(express.json());
 
@@ -25,21 +31,18 @@ app.post('/render', async (req: Request, res: Response) => {
     }
 
     try {
-        const componentFullPath = path.join(__dirname, '..', 'user-app', componentPath);
+        // Use transpiled JS files from dist
+        const componentJsPath = componentPath.replace(/\\/g, '/').replace(/\.tsx?$/, '.js');
+        const componentFullPath = path.join(__dirname, '..', 'user-app', 'dist', componentJsPath);
         let layoutFullPath: string | undefined = undefined;
         if (layoutPath) {
-            layoutFullPath = path.join(__dirname, '..', 'user-app', layoutPath);
+            const layoutJsPath = layoutPath.replace(/\\/g, '/').replace(/\.tsx?$/, '.js');
+            layoutFullPath = path.join(__dirname, '..', 'user-app', 'dist', layoutJsPath);
         }
 
-        // Ensure we don't have stale cache during development
-        if (process.env.NODE_ENV !== 'production') {
-            delete require.cache[require.resolve(componentFullPath)];
-            if (layoutFullPath) {
-                delete require.cache[require.resolve(layoutFullPath)];
-            }
-        }
-
-        const PageModule = require(componentFullPath);
+        // For development: force reload by appending a query param
+        const componentUrl = pathToFileURL(componentFullPath).href + (process.env.NODE_ENV !== 'production' ? `?update=${Date.now()}` : '');
+        const PageModule = await import(componentUrl);
         const Page = PageModule.default || PageModule;
         const pageMetadata = PageModule.metadata || {};
 
@@ -50,7 +53,8 @@ app.post('/render', async (req: Request, res: Response) => {
         let element: React.ReactElement;
         let layoutMetadata = {};
         if (layoutFullPath) {
-            const LayoutModule = require(layoutFullPath);
+            const layoutUrl = pathToFileURL(layoutFullPath).href + (process.env.NODE_ENV !== 'production' ? `?update=${Date.now()}` : '');
+            const LayoutModule = await import(layoutUrl);
             const Layout = LayoutModule.default || LayoutModule;
             layoutMetadata = LayoutModule.metadata || {};
             if (typeof Layout !== 'function') {

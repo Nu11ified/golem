@@ -9,13 +9,22 @@
   "devDependencies": {
     "@types/react": "^18.0.28",
     "@types/react-dom": "^18.0.11",
+    "autoprefixer": "^10.4.21",
     "json-schema-to-typescript": "^15.0.4",
+    "postcss": "^8.5.5",
+    "tailwindcss": "^3.4.3",
+    "ts-node": "^10.9.2",
     "typescript": "^5.0.2"
   },
   "scripts": {
     "generate:types": "npx quicktype -s schema ui-schema.json -o ui-schema.d.ts",
     "watch:types": "npx quicktype -s schema ui-schema.json -o ui-schema.d.ts --watch",
-    "build": "npm run generate:types && <your-existing-build-command>",
+    "build:tailwind": "tailwindcss -i ./pages/globals.css -o ./public/tailwind.css --minify",
+    "build:react": "echo 'Add your React build step here'",
+    "build:ts": "tsc --project tsconfig.json",
+    "build": "npm run build:tailwind && npm run generate:types && npm run build:react && npm run build:ts",
+    "watch:ts": "tsc --project tsconfig.json --watch",
     "build:server": "tsc -p tsconfig.server.json"
-  }
+  },
+  "type": "module"
 }
