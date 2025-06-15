@@ -16,7 +16,7 @@
     "build:rollup": "pnpm generate:import-map && rollup -c rollup.config.js",
     "clean:client": "node clean-client-bundles.js",
     "sync:metadata": "node scripts/sync-metadata.mjs",
-    "build:server": "tsc --project tsconfig.json --outDir dist"
+    "build:server": "tsc --project tsconfig.json --outDir dist && cp importMap.generated.js dist/ && cp importMap.generated.d.ts dist/"
   },
   "dependencies": {
     "@rollup/plugin-replace": "^6.0.2",
