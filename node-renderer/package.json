@@ -10,7 +10,7 @@
     "watch:node": "nodemon --watch renderer.ts --exec \"node renderer.ts\"",
     "watch:go": "nodemon --watch ../go-orchestrator --ext go --exec \"cd ../go-orchestrator && go run main.go\"",
     "build": "pnpm sync:metadata && pnpm generate:import-map && pnpm build:rollup && pnpm clean:client",
-    "start": "go run ../go-orchestrator/main.go",
+    "start": "node renderer.ts",
     "start:node": "node renderer.ts",
     "generate:import-map": "node generate-import-map.js",
     "build:rollup": "pnpm generate:import-map && rollup -c rollup.config.js",
