@@ -1,68 +1,141 @@
 # Golem Framework 🗿
 
-**Build powerful, reactive, and type-safe web applications with pure Go.**
+[![Go Report Card](https://goreportcard.com/badge/github.com/Nu11ified/go-react-framework)](https://goreportcard.com/report/github.com/Nu11ified/go-react-framework)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Experimental](https://img.shields.io/badge/status-experimental-red.svg)](#current-status)
 
-Golem is an experimental framework that leverages WebAssembly to allow developers to write frontend applications entirely in Go. It provides a CLI for managing projects, a reactive state management system, and a component-based architecture for building user interfaces.
+**Build powerful, reactive, and type-safe web frontends with pure Go.**
 
-## Core Philosophy
-
--   **Go Everywhere**: Eliminate the need for a JavaScript/TypeScript toolchain for frontend development. Write in one language for your entire stack.
--   **Type Safety**: Leverage Go's static typing across your entire application, from server logic to frontend components, catching errors at compile time.
--   **Simplicity**: Provide a minimal, intuitive API that feels natural to Go developers, without sacrificing the power needed for modern web applications.
--   **Performance**: Utilize WebAssembly to run high-performance Go code directly in the browser.
-
-## Architecture Diagram
-
-The diagram below outlines the development lifecycle and architecture of a Golem application:
-
-```mermaid
-graph TD
-    subgraph "Developer's Machine"
-        A["Go Source Code <br/>(src/app, src/components)"] -- "Input to" --> B("Golem CLI");
-        C["golem.config.json"] -- "Configures" --> B;
-    end
-
-    subgraph "Golem CLI Actions"
-        B -- "golem dev" --> D["Dev Server"];
-        B -- "golem build" --> E["Production Build <br/>(.golem/build)"];
-    end
-
-    D -- "Serves Files" --> F["Browser"];
-    
-    subgraph "Browser Environment"
-        F -- "Loads" --> G["index.html"];
-        G -- "Fetches" --> H["wasm_exec.js"];
-        G -- "Fetches" --> I["app.wasm"];
-        I -- "Instantiated by" --> H;
-        J["Go App Running as WASM"] -- "Manipulates" --> K["DOM"];
-        H -- "Runs" --> J;
-        K -- "Displays" --> L["Live UI"];
-    end
-
-    E -- "Can be deployed to any static host" --> M["Production Server"];
-
-    classDef cli fill:#d4edda,stroke:#155724,stroke-width:2px;
-    class B,D,E cli;
-```
+Golem is an experimental web framework that leverages WebAssembly to allow developers to write frontend applications entirely in the Go programming language. It eliminates the need for a separate JavaScript/TypeScript toolchain and brings the benefits of Go's simplicity, performance, and type safety to the world of frontend development.
 
 ## Features
 
--   ✅ **Pure Go Frontend**: Write your entire application, including UI components and logic, in Go.
+-   ✅ **Pure Go Frontend**: Write your UI components, state management, and application logic in 100% Go.
+-   ✅ **Type Safety**: Catch errors at compile time, not runtime, with Go's static typing across your entire stack.
+-   ✅ **Reactivity Model**: A simple and powerful observable-based state management system to build dynamic interfaces.
+-   ✅ **Virtual DOM**: Efficiently updates the browser's DOM by calculating and applying minimal changes.
 -   ✅ **CLI Tooling**: A simple `golem` command to create, run, and build your projects.
--   ✅ **Reactivity**: A state management system (`state` package) with observables to automatically update your UI when data changes.
--   ✅ **Component-Based UI**: A simple but powerful component model (`dom` package) for creating reusable UI elements.
--   ✅ **Efficient Rendering**: Uses a Virtual DOM to minimize direct manipulation of the browser's DOM.
 -   ✅ **Zero JS Dependencies**: The final build is a static `index.html`, a `wasm_exec.js` helper, and your compiled `app.wasm`.
+
+## Architecture Deep Dive
+
+Golem's architecture is designed to be simple and transparent. The following diagrams illustrate the key concepts.
+
+### 1. System Architecture
+
+This diagram shows the high-level view of the Golem ecosystem, from development to the final application running in the browser.
+
+```mermaid
+graph TD
+    subgraph "Development Environment"
+        direction LR
+        DevCode["Go Source Code<br>(src/app/main.go)"]
+        CLI["Golem CLI<br>(./golem)"]
+        DevCode -- "golem dev" --> CLI
+    end
+
+    subgraph "Build Process (Handled by 'golem dev')"
+        direction TB
+        CLI --> GoCompiler["Go Compiler<br>(tinygo)"]
+        GoCompiler -- "Compiles to" --> Wasm["WebAssembly Module<br>(.golem/dev/app.wasm)"]
+        CLI --> DevServer["Development Web Server"]
+        Wasm -- "Served with" --> DevServer
+        JSHelper["wasm_exec.js<br>(Go WASM Helper)"] -- "Served by" --> DevServer
+    end
+
+    subgraph "Browser Environment (Client-Side)"
+        direction TB
+        DevServer -- "HTTP Request" --> Browser["User's Browser"]
+        Browser -- "Loads" --> JSHelper
+        Browser -- "Loads & Instantiates" --> Wasm
+        Wasm -- "Executes Go main()" --> GoApp["Go Application Logic<br>(Running in WASM)"]
+        GoApp -- "Manipulates DOM via" --> VDOM["Golem Virtual DOM"]
+    end
+
+    subgraph "User Interface"
+        VDOM -- "Renders & Patches" --> RealDOM["Live HTML DOM<br>(What the user sees)"]
+    end
+
+    style DevCode fill:#f0f8ff,stroke:#4a90e2
+    style CLI fill:#f0f8ff,stroke:#4a90e2
+    style GoCompiler fill:#fffbe6,stroke:#f5a623
+    style Wasm fill:#fffbe6,stroke:#f5a623
+    style DevServer fill:#fffbe6,stroke:#f5a623
+    style JSHelper fill:#fffbe6,stroke:#f5a623
+    style Browser fill:#e6ffed,stroke:#7ed321
+    style GoApp fill:#e6ffed,stroke:#7ed321
+    style VDOM fill:#e6ffed,stroke:#7ed321
+    style RealDOM fill:#d4edda,stroke:#155724
+```
+
+### 2. Reactivity & Data Flow
+
+This diagram details how Golem's reactive state management works. When an event updates the application state, the UI automatically reflects the change through a one-way data flow.
+
+```mermaid
+graph TD
+    subgraph "1. User Interaction"
+        User["User"] -- "Clicks Button" --> DOMButton["DOM Button Element"];
+    end
+
+    subgraph "2. Event Handling (Go in WASM)"
+        DOMButton -- "Triggers 'onclick'" --> GoCallback["Go OnClick Callback"];
+        GoCallback -- "Calls" --> StateSet["state.Set(newValue)"];
+    end
+
+    subgraph "3. State Management (Observable)"
+        StateSet -- "Updates" --> Observable["Observable<T><br><i>Holds application state</i>"];
+        Observable -- "Notifies" --> Subscriptions["Registered Subscriptions<br><i>(Callbacks)</i>"];
+    end
+
+    subgraph "4. UI Update"
+        Subscriptions -- "Execute" --> UIUpdateFn["UI Update Function"];
+        UIUpdateFn -- "Calls" --> ElementUpdate["element.Update(...)"];
+    end
+    
+    subgraph "5. Virtual DOM Diffing & Patching"
+        ElementUpdate -- "Calculates minimal change" --> VDOM["Virtual DOM"];
+        VDOM -- "Generates JS call" --> Patch["DOM Patch<br><i>e.g., element.textContent = 'new'</i>"];
+        Patch -- "Applies changes to" --> RealDOM["Real DOM"];
+    end
+
+    subgraph "6. Visual Feedback"
+        RealDOM -- "Renders update" --> User;
+    end
+
+    style User fill:#fce8e6,stroke:#d93025
+    style DOMButton fill:#e8f0fe,stroke:#4285f4
+    style GoCallback fill:#e6f4ea,stroke:#34a853
+    style StateSet fill:#e6f4ea,stroke:#34a853
+    style Observable fill:#fef7e0,stroke:#fbbc04
+    style Subscriptions fill:#fef7e0,stroke:#fbbc04
+    style UIUpdateFn fill:#e8f0fe,stroke:#4285f4
+    style ElementUpdate fill:#e8f0fe,stroke:#4285f4
+    style VDOM fill:#d1e2ff,stroke:#4a90e2
+    style Patch fill:#fce8e6,stroke:#d93025
+    style RealDOM fill:#e8f0fe,stroke:#4285f4
+```
 
 ## Getting Started
 
+### Prerequisites
+
+-   [Go](https://go.dev/doc/install) (version 1.21 or later)
+-   [TinyGo](https://tinygo.org/getting-started/install/) (for compiling Go to WASM)
+
 ### 1. Build the Golem CLI
 
-First, build the command-line tool from the project root.
+Clone this repository and build the command-line tool from the project root. This is a temporary step until the CLI is published.
 
 ```bash
+# Clone the repository
+git clone https://github.com/Nu11ified/go-react-framework.git
+cd go-react-framework
+
+# Build the CLI
 go build -o golem ./cmd/golem/main.go
 ```
+This will create a `golem` executable in the current directory.
 
 ### 2. Create a New Project
 
@@ -83,316 +156,94 @@ cd my-golem-app
 
 The server will start, compile your Go application to WebAssembly, and serve it. You can now access your application at `http://localhost:3000`.
 
-## Project Structure
+## Example Application
 
-A new Golem project has the following structure:
+Here is a simplified version of a data-fetching application to demonstrate Golem's core concepts.
 
--   `golem.config.json`: Project-specific configuration for the Golem CLI.
--   `go.mod`: The project's Go module file.
--   `src/`: Contains your application's source code.
-    -   `app/main.go`: The main entry point for your application.
-    -   `components/`: A place for your reusable UI components.
-    -   `server/`: (Future Use) For server-side Go functions callable from the frontend.
--   `.golem/`: Contains build artifacts and other files generated by the framework. This directory should typically be added to `.gitignore`.
-
-## Current Status
-
-Golem is currently in a highly experimental, proof-of-concept stage. The API is subject to change, and many features (like true hot-reloading) are still under development.
-
-Contributions and feedback are welcome!
-
-## 🎯 Why Golem?
-
-**The Problem**: Modern web development requires mastering multiple languages, toolchains, and paradigms. JavaScript/TypeScript for frontend, Go/Python/Node for backend, complex build tools, package managers, and maintaining type safety across the stack is challenging.
-
-**The Golem Solution**: Write your entire web application in Go. The framework compiles your Go code to WebAssembly for the browser and provides a seamless development experience with full type safety.
-
-## 🚀 Quick Start
-
-### Installation
-
-```bash
-go install github.com/Nu11ified/golem/cmd/golem@latest
-```
-
-### Create New Project
-
-```bash
-golem new my-app
-cd my-app
-golem dev
-```
-
-Your app will be running at `http://localhost:3000` 🎉
-
-## 📁 Project Structure
-
-```
-my-app/
-├── .golem/
-│   ├── build/     # Production builds
-│   ├── dev/       # Development artifacts  
-│   └── types/     # Generated type definitions
-├── src/
-│   ├── app/       # Main application code
-│   │   └── main.golem
-│   ├── components/    # Reusable UI components
-│   │   └── Button.golem
-│   └── server/    # Backend server functions
-│       └── hello.go
-├── golem.config.json
-├── go.mod
-└── package.json   # For development tools only
-```
-
-## 💻 Example Application
-
-**Frontend (`src/app/main.golem`):**
+**File: `src/app/main.go`**
 
 ```go
 package main
 
 import (
-    "github.com/Nu11ified/golem/dom"
-    "./components"
+	"fmt"
+	"syscall/js"
+
+	"github.com/Nu11ified/golem/dom"
+	"github.com/Nu11ified/golem/state"
 )
 
-type AppState struct {
-    Count int `json:"count"`
-}
-
-func (s *AppState) Increment() {
-    s.Count++
-}
-
-func (s *AppState) Decrement() {
-    s.Count--
-}
-
 func App() *dom.Element {
-    state := &AppState{Count: 0}
-    
-    return dom.Div(
-        dom.Class("app"),
-        dom.H1("Welcome to Golem! 🚀"),
-        
-        dom.Div(
-            dom.Class("counter"),
-            dom.P("Count: ", dom.Text(state.Count)),
-            
-            dom.Button(
-                dom.Text("Increment"),
-                dom.OnClick(state.Increment),
-            ),
-            dom.Button(
-                dom.Text("Decrement"), 
-                dom.OnClick(state.Decrement),
-            ),
-        ),
-        
-        components.Button(components.ButtonProps{
-            Text: "Call Server Function",
-            OnClick: func() {
-                // Type-safe server function call
-                result := server.Hello("World")
-                dom.Alert("Server says: " + result)
-            },
-        }),
-    )
+	// 1. Define reactive state for the counter
+	count := state.NewObservable(0)
+
+	// 2. Create a text node that will display the count
+	// We will update this element directly when the state changes.
+	countText := dom.Text(fmt.Sprintf("Current count: %d", count.Get()))
+
+	// 3. Subscribe to state changes
+	// This function runs whenever count.Set() is called.
+	count.Subscribe(func(newValue, _ int) {
+		// Update the text node's content directly
+		countText.Update(map[string]interface{}{
+			"textContent": fmt.Sprintf("Current count: %d", newValue),
+		})
+	})
+
+	// 4. Return the element tree
+	return dom.Div(
+		dom.H1("Golem Counter Example"),
+		dom.P(countText), // Embed the reactive text node
+		dom.Button(
+			"Increment",
+			dom.OnClick(func() {
+				// Increment the state, which triggers the subscription
+				count.Set(count.Get() + 1)
+			}),
+		),
+		dom.Button(
+			"Decrement",
+			dom.OnClick(func() {
+				count.Set(count.Get() - 1)
+			}),
+		),
+	)
 }
 
 func main() {
-    dom.Render(App(), "#app")
+	// Render the main App component into the DOM element with id="app"
+	dom.Render(App(), "#app")
+
+	// Prevent the Go program from exiting, which is necessary for WASM apps
+	select {}
 }
 ```
 
-**Backend (`src/server/hello.go`):**
+## CLI Commands
 
-```go
-package server
+| Command         | Description                                                        |
+| --------------- | ------------------------------------------------------------------ |
+| `golem new <name>`  | Creates a new Golem project in a directory with the given name.    |
+| `golem dev`         | Starts the development server, watches for file changes, and rebuilds. |
+| `golem build`       | (Coming Soon) Bundles the application for production.              |
+| `golem version`     | Prints the version of the Golem CLI.                               |
 
-import "fmt"
+## Current Status: Experimental
 
-// Hello is automatically exposed to the frontend
-func Hello(name string) string {
-    return fmt.Sprintf("Hello, %s! From Go server.", name)
-}
+Golem is currently in a highly experimental, proof-of-concept stage. The API is subject to change. It is not yet ready for production use but is a great environment for experimenting with the future of web development in Go.
 
-// GetUser demonstrates typed server functions
-func GetUser(userID int) (*User, error) {
-    return &User{
-        ID:   userID,
-        Name: "John Doe",
-        Email: "john@example.com",
-    }, nil
-}
+## Roadmap
 
-type User struct {
-    ID    int    `json:"id"`
-    Name  string `json:"name"`
-    Email string `json:"email"`
-}
-```
+-   [ ] **v0.2**: Stabilize the core `dom` and `state` APIs.
+-   [ ] **v0.3**: Implement a robust component lifecycle system.
+-   [ ] **v0.4**: Introduce a CSS-in-Go styling solution.
+-   [ ] **v0.5**: Add a client-side router.
+-   [ ] **v1.0**: Production-ready release.
 
-**Component (`src/components/Button.golem`):**
+## Contributing
 
-```go
-package components
+This project is in its early stages, and contributions are highly welcome! Whether it's bug reports, feature suggestions, or code contributions, please feel free to open an issue or pull request.
 
-import "github.com/Nu11ified/golem/dom"
+## License
 
-type ButtonProps struct {
-    Text     string
-    OnClick  func()
-    Variant  string // "primary", "secondary", "danger"
-    Disabled bool
-}
-
-func Button(props ButtonProps) *dom.Element {
-    class := "btn"
-    if props.Variant != "" {
-        class += " btn-" + props.Variant
-    }
-    
-    return dom.Button(
-        dom.Class(class),
-        dom.Text(props.Text),
-        dom.OnClick(props.OnClick),
-        dom.If(props.Disabled, dom.Disabled(true)),
-    )
-}
-```
-
-## 🛠 CLI Commands
-
-```bash
-# Development
-golem dev          # Start development server with hot reload
-
-# Production  
-golem build        # Build optimized production bundle
-golem start        # Start production server
-
-# Project Management
-golem new <name>   # Create new Golem project
-golem version      # Show version information
-```
-
-## 🏗 How It Works
-
-1. **Compile Time**: Golem analyzes your `.golem` files and generates:
-   - WebAssembly binaries for frontend code
-   - gRPC services for server functions  
-   - Type definitions for IDE support
-
-2. **Runtime**: 
-   - Frontend runs as WebAssembly in the browser
-   - Virtual DOM efficiently updates only changed elements
-   - Server functions are called via gRPC with full type safety
-   - State changes trigger automatic re-renders
-
-3. **Development**: Hot reload watches your files and instantly updates the browser without losing state
-
-## 🎨 Virtual DOM & State Management
-
-Golem's virtual DOM is optimized for Go's strengths:
-
-```go
-// State automatically triggers re-renders when modified
-type TodoState struct {
-    Items []TodoItem `json:"items"`
-}
-
-func (s *TodoState) AddTodo(text string) {
-    s.Items = append(s.Items, TodoItem{
-        ID:   len(s.Items) + 1,
-        Text: text,
-        Done: false,
-    })
-    // Automatic re-render triggered
-}
-
-// Efficient rendering - only changed elements update
-func (s *TodoState) Render() *dom.Element {
-    return dom.Div(
-        dom.Class("todo-app"),
-        dom.For(s.Items, func(item TodoItem) *dom.Element {
-            return dom.Li(
-                dom.Class("todo-item"),
-                dom.Text(item.Text),
-                dom.If(item.Done, dom.Class("completed")),
-            )
-        }),
-    )
-}
-```
-
-## 🔧 Configuration
-
-**`golem.config.json`:**
-
-```json
-{
-  "projectName": "my-app",
-  "entry": "src/app/main.golem",
-  "output": ".golem/build",
-  "dev": {
-    "port": 3000,
-    "hotReload": true,
-    "watch": ["src/**/*.golem", "src/**/*.go"]
-  },
-  "server": {
-    "grpc": {
-      "port": 50051,
-      "reflection": true
-    },
-    "functions": "src/server"
-  },
-  "wasm": {
-    "optimizeSize": true,
-    "enableFeatures": ["bulk-memory", "mutable-globals"]
-  }
-}
-```
-
-## 🚀 Performance 
-
-- **Bundle Size**: Optimized WASM binaries (~500KB gzipped)
-- **Runtime**: Near-native performance thanks to WebAssembly
-- **Loading**: Progressive loading with instant hydration
-- **Updates**: Minimal DOM operations via virtual DOM diffing
-
-## 🛣 Roadmap
-
-- [ ] **v0.2**: Complete gRPC integration
-- [ ] **v0.3**: CSS-in-Go styling system  
-- [ ] **v0.4**: Routing and navigation
-- [ ] **v0.5**: Database integration patterns
-- [ ] **v0.6**: Progressive Web App features
-- [ ] **v1.0**: Production-ready release
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-## 📖 Documentation
-
-- [Getting Started Guide](docs/getting-started.md)
-- [API Reference](docs/api-reference.md)
-- [Component Guide](docs/components.md)
-- [Server Functions](docs/server-functions.md)
-- [Examples](examples/)
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## ⭐ Support
-
-If you find Golem useful, please consider giving it a star on GitHub! 
-
----
-
-**Built with ❤️ by [@Nu11ified](https://github.com/Nu11ified)**
-
-*Golem Framework - Reactive web apps, purely in Go.* 
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
