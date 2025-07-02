@@ -34,3 +34,5 @@ node-renderer/*.js.map
 user-app/dist/
 user-app/ui-schema.json
 user-app/site-metadata.json
+
+PUBLISHING.md

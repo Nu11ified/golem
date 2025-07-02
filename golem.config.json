@@ -1,0 +1,27 @@
+{
+  "projectName": "golem-framework",
+  "version": "0.1.0",
+  "entry": "src/app/main.golem",
+  "output": ".golem/build",
+  "dev": {
+    "port": 3000,
+    "hotReload": true,
+    "watch": ["src/**/*.golem", "src/**/*.go"]
+  },
+  "build": {
+    "minify": true,
+    "target": "es2020",
+    "sourcemap": true
+  },
+  "server": {
+    "grpc": {
+      "port": 50051,
+      "reflection": true
+    },
+    "functions": "src/server"
+  },
+  "wasm": {
+    "optimizeSize": true,
+    "enableFeatures": ["bulk-memory", "mutable-globals"]
+  }
+} 

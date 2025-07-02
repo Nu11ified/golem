@@ -1,30 +1,17 @@
 {
-  "name": "go-react-framework-root",
-  "private": true,
-  "version": "0.0.1",
-  "workspaces": [
-    "user-app",
-    "node-renderer"
-  ],
-  "devDependencies": {
-    "json-schema-to-typescript": "^15.0.4",
-    "npm-run-all": "^4.1.5",
-    "ts-node": "^10.9.2"
-  },
+  "name": "golem-framework",
+  "version": "0.1.0",
+  "description": "Server-side rendered web apps in pure Go with WebAssembly",
   "scripts": {
-    "generate:types": "tsc --project tsconfig.json --emitDeclarationOnly",
-    "generate:import-map": "node scripts/generate-import-map.js",
-    "dev:node": "run-p --race node:watch node:start",
-    "node:watch": "pnpm --filter node-renderer dev:client",
-    "node:start": "pnpm --filter node-renderer start",
-    "dev:go": "cd go-orchestrator && go run main.go",
-    "watch:go-plugins": "cd go-orchestrator && go run ./watch-plugins",
-    "build:go-plugins": "cd go-orchestrator && go run ./build-plugins",
-    "build:client": "pnpm --filter node-renderer build:client",
-    "build:go": "cd go-orchestrator && go build -o server main.go",
-    "sync-metadata": "node ./user-app/scripts/sync-metadata.js",
-    "dev": "pnpm --filter node-renderer dev",
-    "build": "pnpm --filter node-renderer build",
-    "start": "pnpm --filter node-renderer start"
+    "dev": "golem dev",
+    "build": "golem build",
+    "start": "golem start",
+    "start:node": "nodemon --watch src --ext go,golem --exec 'golem dev'"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
-}
+} 

@@ -1,0 +1,13 @@
+{
+  "name": "golem-test-app",
+  "version": "0.1.0",
+  "description": "A Golem application",
+  "scripts": {
+    "dev": "golem dev",
+    "build": "golem build",
+    "start": "golem start"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
