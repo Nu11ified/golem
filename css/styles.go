@@ -497,9 +497,13 @@ func GenerateClassName(prefix string) string {
 // Runtime style injection
 func InjectStyles(css string) {
 	doc := js.Global().Get("document")
-	head := doc.Get("head")
+	head := doc.Call("querySelector", "head")
+	if head.IsNull() {
+		fmt.Println("Could not find head element to inject styles")
+		return
+	}
 
-	styleEl := doc.Call("createElement", "style")
-	styleEl.Set("textContent", css)
-	head.Call("appendChild", styleEl)
+	styleElement := doc.Call("createElement", "style")
+	styleElement.Set("innerHTML", css)
+	head.Call("appendChild", styleElement)
 }

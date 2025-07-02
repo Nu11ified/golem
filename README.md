@@ -1,6 +1,10 @@
+# Golem: A Go-Based Reactive Web Framework
+
+![Golem Demo App](static/demoapp.png)
+
 # Golem Framework 🗿
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/Nu11ified/go-react-framework)](https://goreportcard.com/report/github.com/Nu11ified/go-react-framework)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Nu11ified/golem)](https://goreportcard.com/report/github.com/Nu11ified/golem)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Experimental](https://img.shields.io/badge/status-experimental-red.svg)](#current-status)
 
@@ -129,8 +133,8 @@ Clone this repository and build the command-line tool from the project root. Thi
 
 ```bash
 # Clone the repository
-git clone https://github.com/Nu11ified/go-react-framework.git
-cd go-react-framework
+git clone https://github.com/Nu11ified/golem.git
+cd golem
 
 # Build the CLI
 go build -o golem ./cmd/golem/main.go

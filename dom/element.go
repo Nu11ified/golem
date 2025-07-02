@@ -13,7 +13,7 @@ type Element struct {
 	Type          string
 	Props         map[string]interface{}
 	Children      []*Element
-	EventHandlers map[string]func()
+	EventHandlers map[string]js.Func
 	JSElement     js.Value
 }
 
@@ -23,21 +23,27 @@ type Attribute struct {
 	Value interface{}
 }
 
+// EventAttribute represents an event handler attribute
+type EventAttribute struct {
+	Name    string
+	Handler interface{}
+}
+
 // NewElement creates a new virtual DOM element with mixed arguments
 func NewElement(tagType string, args ...interface{}) *Element {
 	props := make(map[string]interface{})
-	eventHandlers := make(map[string]func())
+	eventHandlers := make(map[string]js.Func)
 	children := make([]*Element, 0)
 
 	for _, arg := range args {
 		switch v := arg.(type) {
 		case Attribute:
-			if v.Name == "onclick" {
-				if handler, ok := v.Value.(func()); ok {
-					eventHandlers["click"] = handler
-				}
-			} else if v.Name != "" { // Skip empty attributes from If() function
+			if v.Name != "" { // Skip empty attributes from If() function
 				props[v.Name] = v.Value
+			}
+		case EventAttribute:
+			if fn, ok := createEventHandler(v); ok {
+				eventHandlers[v.Name] = fn
 			}
 		case *Element:
 			children = append(children, v)
@@ -47,7 +53,7 @@ func NewElement(tagType string, args ...interface{}) *Element {
 				Type:          "text",
 				Props:         map[string]interface{}{"textContent": v},
 				Children:      make([]*Element, 0),
-				EventHandlers: make(map[string]func()),
+				EventHandlers: make(map[string]js.Func),
 			}
 			children = append(children, textElement)
 		}
@@ -59,6 +65,40 @@ func NewElement(tagType string, args ...interface{}) *Element {
 		Children:      children,
 		EventHandlers: eventHandlers,
 	}
+}
+
+func createEventHandler(event EventAttribute) (js.Func, bool) {
+	switch event.Name {
+	case "click":
+		if handler, ok := event.Handler.(func()); ok {
+			return js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+				handler()
+				return nil
+			}), true
+		}
+	case "input":
+		if handler, ok := event.Handler.(func(string)); ok {
+			return js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+				handler(args[0].Get("target").Get("value").String())
+				return nil
+			}), true
+		}
+	case "change":
+		if handler, ok := event.Handler.(func(bool)); ok {
+			return js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+				handler(args[0].Get("target").Get("checked").Bool())
+				return nil
+			}), true
+		}
+	case "keydown":
+		if handler, ok := event.Handler.(func(string)); ok {
+			return js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+				handler(args[0].Get("key").String())
+				return nil
+			}), true
+		}
+	}
+	return js.Func{}, false
 }
 
 // AddChild adds a child element
@@ -92,6 +132,8 @@ func (e *Element) Render() js.Value {
 				e.JSElement.Set("id", value)
 			case "textContent":
 				e.JSElement.Set("textContent", value)
+			case "checked", "autofocus":
+				e.JSElement.Set(name, value)
 			default:
 				e.JSElement.Call("setAttribute", name, fmt.Sprintf("%v", value))
 			}
@@ -99,11 +141,7 @@ func (e *Element) Render() js.Value {
 
 		// Add event listeners
 		for event, handler := range e.EventHandlers {
-			jsHandler := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-				handler()
-				return nil
-			})
-			e.JSElement.Call("addEventListener", event, jsHandler)
+			e.JSElement.Call("addEventListener", event, handler)
 		}
 	}
 
@@ -156,8 +194,40 @@ func Text(text interface{}) Attribute {
 	return Attribute{Name: "textContent", Value: fmt.Sprintf("%v", text)}
 }
 
-func OnClick(handler func()) Attribute {
-	return Attribute{Name: "onclick", Value: handler}
+func Placeholder(text string) Attribute {
+	return Attribute{Name: "placeholder", Value: text}
+}
+
+func Autofocus(focus bool) Attribute {
+	return Attribute{Name: "autofocus", Value: focus}
+}
+
+func Type(typeStr string) Attribute {
+	return Attribute{Name: "type", Value: typeStr}
+}
+
+func Checked(checked bool) Attribute {
+	return Attribute{Name: "checked", Value: checked}
+}
+
+func On(event string, handler interface{}) EventAttribute {
+	return EventAttribute{Name: event, Handler: handler}
+}
+
+func OnClick(handler func()) EventAttribute {
+	return On("click", handler)
+}
+
+func OnInput(handler func(value string)) EventAttribute {
+	return On("input", handler)
+}
+
+func OnChange(handler func(checked bool)) EventAttribute {
+	return On("change", handler)
+}
+
+func OnKeyDown(handler func(key string)) EventAttribute {
+	return On("keydown", handler)
 }
 
 func Disabled(disabled bool) Attribute {
@@ -194,6 +264,11 @@ func Button(args ...interface{}) *Element {
 
 func Input(args ...interface{}) *Element {
 	return NewElement("input", args...)
+}
+
+func Checkbox(args ...interface{}) *Element {
+	newArgs := append([]interface{}{Type("checkbox")}, args...)
+	return NewElement("input", newArgs...)
 }
 
 func Span(args ...interface{}) *Element {
