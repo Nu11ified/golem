@@ -4,24 +4,92 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - main
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: false
+        default: 'auto'
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        default: false
+        type: boolean
+  repository_dispatch:
+    types: [auto-release]
 
 jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
       contents: write  # Required to create releases and upload assets
+    
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all history for version calculation
     
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
         go-version: '1.23'
     
-    - name: Get version
-      id: get_version
-      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+    - name: Determine version
+      id: version
+      run: |
+        if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" =~ ^refs/tags/v.* ]]; then
+          # Tag-based release
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "IS_TAG=true" >> $GITHUB_OUTPUT
+        elif [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
+          # Auto-release triggered
+          VERSION=${{ github.event.client_payload.version }}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "IS_TAG=false" >> $GITHUB_OUTPUT
+        elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.version }}" != "auto" ]]; then
+          # Manual release with specified version
+          VERSION=${{ github.event.inputs.version }}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "IS_TAG=false" >> $GITHUB_OUTPUT
+        else
+          # Auto-generate version based on commits
+          # Get the latest tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $LATEST_TAG"
+          
+          # Get commit count since last tag
+          COMMIT_COUNT=$(git rev-list --count ${LATEST_TAG}..HEAD)
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          
+          if [[ $COMMIT_COUNT -eq 0 ]]; then
+            VERSION=$LATEST_TAG
+          else
+            # Auto-increment patch version
+            BASE_VERSION=${LATEST_TAG#v}
+            IFS='.' read -r -a VERSION_PARTS <<< "$BASE_VERSION"
+            MAJOR=${VERSION_PARTS[0]}
+            MINOR=${VERSION_PARTS[1]}
+            PATCH=${VERSION_PARTS[2]}
+            PATCH=$((PATCH + 1))
+            VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+          fi
+          
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "IS_TAG=false" >> $GITHUB_OUTPUT
+        fi
+        
+        echo "Release version: $VERSION"
+    
+    - name: Create tag if needed
+      if: steps.version.outputs.IS_TAG == 'false'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git tag ${{ steps.version.outputs.VERSION }}
+        git push origin ${{ steps.version.outputs.VERSION }}
     
     - name: Download dependencies
       run: |
@@ -29,12 +97,8 @@ jobs:
         go mod tidy
         go mod verify
     
-    - name: Check module status
-      run: |
-        pwd
-        ls -la
-        go mod graph | head -10
-        go list -m all
+    - name: Run tests
+      run: go test -v ./...
     
     - name: Build binaries
       run: |
@@ -48,36 +112,49 @@ jobs:
           GOOS="${platform_split[0]}"
           GOARCH="${platform_split[1]}"
           
-          output_name="golem-${{ steps.get_version.outputs.VERSION }}-$GOOS-$GOARCH"
+          output_name="golem-${{ steps.version.outputs.VERSION }}-$GOOS-$GOARCH"
           if [ "$GOOS" = "windows" ]; then
             output_name="$output_name.exe"
           fi
           
           echo "Building for $GOOS/$GOARCH..."
-          env GOOS="$GOOS" GOARCH="$GOARCH" go build -o "releases/$output_name" -ldflags="-s -w -X main.version=${{ steps.get_version.outputs.VERSION }}" ./cmd/golem
+          env GOOS="$GOOS" GOARCH="$GOARCH" go build -o "releases/$output_name" -ldflags="-s -w -X main.version=${{ steps.version.outputs.VERSION }}" ./cmd/golem
           
           # Create compressed archive and remove the raw binary
           if [ "$GOOS" = "windows" ]; then
-            (cd releases && zip "golem-${{ steps.get_version.outputs.VERSION }}-$GOOS-$GOARCH.zip" "$output_name" && rm "$output_name")
+            (cd releases && zip "golem-${{ steps.version.outputs.VERSION }}-$GOOS-$GOARCH.zip" "$output_name" && rm "$output_name")
           else
-            (cd releases && tar -czf "golem-${{ steps.get_version.outputs.VERSION }}-$GOOS-$GOARCH.tar.gz" "$output_name" && rm "$output_name")
+            (cd releases && tar -czf "golem-${{ steps.version.outputs.VERSION }}-$GOOS-$GOARCH.tar.gz" "$output_name" && rm "$output_name")
           fi
         done
     
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Get commits since last tag for changelog
+        LATEST_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+        if [ -n "$LATEST_TAG" ]; then
+          CHANGELOG=$(git log --pretty=format:"- %s" ${LATEST_TAG}..HEAD | head -20)
+        else
+          CHANGELOG=$(git log --pretty=format:"- %s" HEAD~10..HEAD)
+        fi
+        
+        # Escape newlines for GitHub Actions
+        CHANGELOG="${CHANGELOG//$'\n'/'%0A'}"
+        echo "CHANGELOG=$CHANGELOG" >> $GITHUB_OUTPUT
+    
     - name: Create Release
-      uses: softprops/action-gh-release@v1
-      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
       with:
+        tag_name: ${{ steps.version.outputs.VERSION }}
         files: |
           releases/*.tar.gz
           releases/*.zip
         generate_release_notes: true
-        prerelease: false
-        name: Golem ${{ steps.get_version.outputs.VERSION }}
+        prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+        name: Golem ${{ steps.version.outputs.VERSION }}
         body: |
-          ## 🗿 Golem Framework ${{ steps.get_version.outputs.VERSION }}
-          
-          Download the appropriate binary for your platform:
+          ## 🗿 Golem Framework ${{ steps.version.outputs.VERSION }}
           
           ### 📦 Quick Install
           ```bash
@@ -85,24 +162,27 @@ jobs:
           ```
           
           ### 📱 Manual Download
-          - **Linux (x64)**: `golem-${{ steps.get_version.outputs.VERSION }}-linux-amd64.tar.gz`
-          - **Linux (ARM64)**: `golem-${{ steps.get_version.outputs.VERSION }}-linux-arm64.tar.gz`
-          - **macOS (Intel)**: `golem-${{ steps.get_version.outputs.VERSION }}-darwin-amd64.tar.gz`
-          - **macOS (Apple Silicon)**: `golem-${{ steps.get_version.outputs.VERSION }}-darwin-arm64.tar.gz`
-          - **Windows (x64)**: `golem-${{ steps.get_version.outputs.VERSION }}-windows-amd64.zip`
+          - **Linux (x64)**: `golem-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz`
+          - **Linux (ARM64)**: `golem-${{ steps.version.outputs.VERSION }}-linux-arm64.tar.gz`
+          - **macOS (Intel)**: `golem-${{ steps.version.outputs.VERSION }}-darwin-amd64.tar.gz`
+          - **macOS (Apple Silicon)**: `golem-${{ steps.version.outputs.VERSION }}-darwin-arm64.tar.gz`
+          - **Windows (x64)**: `golem-${{ steps.version.outputs.VERSION }}-windows-amd64.zip`
           
           ### 🚀 Getting Started
           ```bash
           # Extract the binary (example for Linux/macOS)
-          tar -xzf golem-${{ steps.get_version.outputs.VERSION }}-linux-amd64.tar.gz
+          tar -xzf golem-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz
           
           # Move to your PATH
-          sudo mv golem-${{ steps.get_version.outputs.VERSION }}-linux-amd64 /usr/local/bin/golem
+          sudo mv golem-${{ steps.version.outputs.VERSION }}-linux-amd64 /usr/local/bin/golem
           
           # Create your first app
           golem new my-app
           cd my-app
           golem dev
           ```
+          
+          ### 📝 Changes in this version
+          ${{ steps.changelog.outputs.CHANGELOG }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

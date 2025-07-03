@@ -129,14 +129,11 @@ graph TD
 curl -sSL https://raw.githubusercontent.com/Nu11ified/golem/main/install.sh | bash
 ```
 
+This script automatically detects your OS/architecture and installs the latest release.
+
 #### Option 2: Manual Download
 1. Go to the [releases page](https://github.com/Nu11ified/golem/releases)
-2. Download the appropriate binary for your platform:
-   - **Linux (x64)**: `golem-v0.1.0-linux-amd64.tar.gz`
-   - **Linux (ARM64)**: `golem-v0.1.0-linux-arm64.tar.gz`
-   - **macOS (Intel)**: `golem-v0.1.0-darwin-amd64.tar.gz`
-   - **macOS (Apple Silicon)**: `golem-v0.1.0-darwin-arm64.tar.gz`
-   - **Windows (x64)**: `golem-v0.1.0-windows-amd64.zip`
+2. Download the appropriate binary for your platform (auto-built for all platforms)
 3. Extract the archive and move the binary to your PATH
 
 #### Option 3: Build from Source
@@ -258,6 +255,24 @@ func main() {
 | `golem build`       | (Coming Soon) Bundles the application for production.              |
 | `golem version`     | Prints the version of the Golem CLI.                               |
 
+## 🚀 Automated Releases
+
+This project uses automated releases! Binaries are automatically built for all platforms when code is pushed. 
+
+**To trigger a new release**, use conventional commit messages:
+```bash
+# Bug fixes (patch version)
+git commit -m "fix: resolve authentication issue"
+
+# New features (minor version) 
+git commit -m "feat: add dark mode support"
+
+# Breaking changes (major version)
+git commit -m "feat!: redesign API structure"
+```
+
+**Every commit to main** automatically builds and tests on all platforms. Release binaries include Linux (x64/ARM64), macOS (Intel/Apple Silicon), and Windows (x64).
+
 ## Current Status: Experimental
 
 Golem is currently in a highly experimental, proof-of-concept stage. The API is subject to change. It is not yet ready for production use but is a great environment for experimenting with the future of web development in Go.
@@ -273,6 +288,8 @@ Golem is currently in a highly experimental, proof-of-concept stage. The API is 
 ## Contributing
 
 This project is in its early stages, and contributions are highly welcome! Whether it's bug reports, feature suggestions, or code contributions, please feel free to open an issue or pull request.
+
+Use conventional commit messages to trigger automatic releases when your changes are ready.
 
 ## License
 

@@ -1,0 +1,102 @@
+name: Auto Release
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
+      - '*.md'
+
+jobs:
+  check-release:
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      release_type: ${{ steps.check.outputs.release_type }}
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Check if release should be triggered
+      id: check
+      run: |
+        # Check last commit message for release keywords
+        LAST_COMMIT_MSG=$(git log -1 --pretty=format:"%s")
+        echo "Last commit: $LAST_COMMIT_MSG"
+        
+        # Check for release keywords in commit message
+        if [[ "$LAST_COMMIT_MSG" =~ ^(release|Release|RELEASE)[:\ ] ]] || \
+           [[ "$LAST_COMMIT_MSG" =~ \[release\] ]] || \
+           [[ "$LAST_COMMIT_MSG" =~ ^(feat|fix|breaking)(\(.+\))?!: ]] || \
+           [[ "$LAST_COMMIT_MSG" =~ ^(v[0-9]+\.[0-9]+\.[0-9]+) ]]; then
+          echo "should_release=true" >> $GITHUB_OUTPUT
+          
+          # Determine release type
+          if [[ "$LAST_COMMIT_MSG" =~ ^(breaking|BREAKING)[:\ ] ]] || \
+             [[ "$LAST_COMMIT_MSG" =~ !: ]]; then
+            echo "release_type=major" >> $GITHUB_OUTPUT
+          elif [[ "$LAST_COMMIT_MSG" =~ ^(feat|feature)[:\ ] ]] || \
+               [[ "$LAST_COMMIT_MSG" =~ ^feat\(.+\): ]]; then
+            echo "release_type=minor" >> $GITHUB_OUTPUT
+          else
+            echo "release_type=patch" >> $GITHUB_OUTPUT
+          fi
+        else
+          echo "should_release=false" >> $GITHUB_OUTPUT
+        fi
+
+  trigger-release:
+    needs: check-release
+    if: needs.check-release.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Calculate new version
+      id: version
+      run: |
+        # Get the latest tag
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        echo "Latest tag: $LATEST_TAG"
+        
+        # Parse version
+        BASE_VERSION=${LATEST_TAG#v}
+        IFS='.' read -r -a VERSION_PARTS <<< "$BASE_VERSION"
+        MAJOR=${VERSION_PARTS[0]}
+        MINOR=${VERSION_PARTS[1]}
+        PATCH=${VERSION_PARTS[2]}
+        
+        # Increment based on release type
+        case "${{ needs.check-release.outputs.release_type }}" in
+          "major")
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+            ;;
+          "minor")
+            MINOR=$((MINOR + 1))
+            PATCH=0
+            ;;
+          "patch")
+            PATCH=$((PATCH + 1))
+            ;;
+        esac
+        
+        NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+        echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "New version: $NEW_VERSION"
+    
+    - name: Trigger release workflow
+      uses: peter-evans/repository-dispatch@v3
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        event-type: auto-release
+        client-payload: '{"version": "${{ steps.version.outputs.NEW_VERSION }}"}' 
