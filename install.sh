@@ -75,9 +75,21 @@ get_latest_version() {
     info "Fetching latest version..."
     
     if command -v curl >/dev/null 2>&1; then
+        # Try latest release first
         LATEST_VERSION=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+        
+        # If no latest release (likely prerelease only), get the most recent release
+        if [ -z "$LATEST_VERSION" ]; then
+            LATEST_VERSION=$(curl -s "https://api.github.com/repos/$REPO/releases" | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+        fi
     elif command -v wget >/dev/null 2>&1; then
+        # Try latest release first
         LATEST_VERSION=$(wget -qO- "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+        
+        # If no latest release (likely prerelease only), get the most recent release
+        if [ -z "$LATEST_VERSION" ]; then
+            LATEST_VERSION=$(wget -qO- "https://api.github.com/repos/$REPO/releases" | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+        fi
     else
         error "Neither curl nor wget found. Please install one of them."
     fi

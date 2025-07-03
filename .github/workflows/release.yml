@@ -59,6 +59,7 @@ jobs:
           releases/*.tar.gz
           releases/*.zip
         generate_release_notes: true
+        prerelease: false
         name: Golem ${{ steps.get_version.outputs.VERSION }}
         body: |
           ## 🗿 Golem Framework ${{ steps.get_version.outputs.VERSION }}
