@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/Nu11ified/golem/internal/config"
 )
@@ -181,12 +182,28 @@ func (b *Builder) copyWasmExec() error {
 		if err != nil {
 			return fmt.Errorf("failed to get GOROOT: %v", err)
 		}
-		goRoot = string(output)
+		goRoot = strings.TrimSpace(string(output))
 	}
 
-	srcPath := filepath.Join(goRoot, "misc", "wasm", "wasm_exec.js")
-	dstPath := filepath.Join(b.config.Output, "wasm_exec.js")
+	// Try both possible locations for wasm_exec.js
+	possiblePaths := []string{
+		filepath.Join(goRoot, "lib", "wasm", "wasm_exec.js"),  // Go 1.21+
+		filepath.Join(goRoot, "misc", "wasm", "wasm_exec.js"), // Go < 1.21
+	}
 
+	var srcPath string
+	for _, path := range possiblePaths {
+		if _, err := os.Stat(path); err == nil {
+			srcPath = path
+			break
+		}
+	}
+
+	if srcPath == "" {
+		return fmt.Errorf("wasm_exec.js not found in Go installation at %s", goRoot)
+	}
+
+	dstPath := filepath.Join(b.config.Output, "wasm_exec.js")
 	return b.copyFile(srcPath, dstPath)
 }
 
