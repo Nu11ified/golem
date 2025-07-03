@@ -1,41 +1,64 @@
-# Node
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+golem
+golem.exe
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Go workspace file
+go.work
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Golem specific files
+.golem/
+*.golem
+releases/
+
+# Node.js (if using any JS tooling)
 node_modules/
-
-# Build outputs
-**/dist/
-**/build/
-**/out/
-
-# Binaries
-bin/
-
-# Go binaries
-/go-orchestrator/server
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Logs
+logs
 *.log
 
-# OS/Editor
-.DS_Store
-.env
-.idea/
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
 
-# TypeScript
-*.tsbuildinfo
-user-app/tsconfig.server.tsbuildinfo
+# Coverage directory used by tools like istanbul
+coverage
 
-# Misc
-importMap.generated.js
-node-renderer/metadata.json
-node-renderer/dist/
-node-renderer/client-manifest.json
-node-renderer/*.js.map
-user-app/dist/
-user-app/ui-schema.json
-user-app/site-metadata.json
-
-PUBLISHING.md
-
-.golem
-
-golem
+# Temporary folders
+tmp/
+temp/
