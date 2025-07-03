@@ -24,6 +24,12 @@ declare -a PLATFORMS=(
 
 echo "🔨 Building $BINARY_NAME $VERSION for multiple platforms..."
 
+# Ensure dependencies are up to date
+echo "📦 Downloading and verifying dependencies..."
+go mod download
+go mod tidy
+go mod verify
+
 for platform in "${PLATFORMS[@]}"; do
     IFS='/' read -r -a platform_split <<< "$platform"
     GOOS="${platform_split[0]}"
@@ -38,7 +44,7 @@ for platform in "${PLATFORMS[@]}"; do
     echo "Building for $GOOS/$GOARCH..."
     
     # Build binary
-    env GOOS="$GOOS" GOARCH="$GOARCH" go build -o "$OUTPUT_DIR/$output_name" -ldflags="-s -w" ./cmd/golem/main.go
+    env GOOS="$GOOS" GOARCH="$GOARCH" go build -o "$OUTPUT_DIR/$output_name" -ldflags="-s -w" ./cmd/golem
     
     # Create compressed archive and remove raw binary
     if [ "$GOOS" = "windows" ]; then

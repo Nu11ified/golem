@@ -17,11 +17,24 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.22'
+        go-version: '1.23'
     
     - name: Get version
       id: get_version
       run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+    
+    - name: Download dependencies
+      run: |
+        go mod download
+        go mod tidy
+        go mod verify
+    
+    - name: Check module status
+      run: |
+        pwd
+        ls -la
+        go mod graph | head -10
+        go list -m all
     
     - name: Build binaries
       run: |
@@ -41,7 +54,7 @@ jobs:
           fi
           
           echo "Building for $GOOS/$GOARCH..."
-          env GOOS="$GOOS" GOARCH="$GOARCH" go build -o "releases/$output_name" -ldflags="-s -w -X main.version=${{ steps.get_version.outputs.VERSION }}" ./cmd/golem/main.go
+          env GOOS="$GOOS" GOARCH="$GOARCH" go build -o "releases/$output_name" -ldflags="-s -w -X main.version=${{ steps.get_version.outputs.VERSION }}" ./cmd/golem
           
           # Create compressed archive and remove the raw binary
           if [ "$GOOS" = "windows" ]; then
