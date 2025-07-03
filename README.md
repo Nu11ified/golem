@@ -126,10 +126,14 @@ graph TD
 
 #### Option 1: One-line Install (Recommended)
 ```bash
+# Navigate to your project directory first
+mkdir my-project && cd my-project
+
+# Install golem locally in this directory
 curl -sSL https://raw.githubusercontent.com/Nu11ified/golem/main/install.sh | bash
 ```
 
-This script automatically detects your OS/architecture and installs the latest release.
+This script automatically detects your OS/architecture and installs golem in your current directory.
 
 #### Option 2: Manual Download
 1. Go to the [releases page](https://github.com/Nu11ified/golem/releases)
@@ -146,14 +150,17 @@ go build -o golem ./cmd/golem/main.go
 ### Create Your First App
 
 ```bash
-# Create a new project
-golem new my-golem-app
+# Create a new project in current directory
+./golem new my-golem-app
 
 # Navigate to the project
 cd my-golem-app
 
+# Copy golem binary to the new project
+cp ../golem .
+
 # Start the development server
-golem dev
+./golem dev
 ```
 
 The server will start, compile your Go application to WebAssembly, and serve it. You can now access your application at `http://localhost:3000`.
@@ -169,16 +176,17 @@ Choose one of the installation methods above to get the `golem` CLI tool.
 Use the CLI to create a new Golem application.
 
 ```bash
-golem new my-golem-app
+./golem new my-golem-app
 ```
 
 ### 3. Run the Development Server
 
-Navigate into your new project and start the development server.
+Navigate into your new project, copy the golem binary, and start the development server.
 
 ```bash
 cd my-golem-app
-golem dev
+cp ../golem .
+./golem dev
 ```
 
 The server will start, compile your Go application to WebAssembly, and serve it. You can now access your application at `http://localhost:3000`.

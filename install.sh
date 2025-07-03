@@ -8,7 +8,7 @@ set -e
 # Configuration
 REPO="Nu11ified/golem"
 BINARY_NAME="golem"
-INSTALL_DIR="/usr/local/bin"
+INSTALL_DIR="."
 
 # Colors for output
 RED='\033[0;31m'
@@ -100,7 +100,7 @@ get_latest_version() {
         echo "  git clone https://github.com/$REPO.git"
         echo "  cd golem"
         echo "  go build -o golem ./cmd/golem"
-        echo "  sudo mv golem /usr/local/bin/"
+        echo "  cp golem /path/to/your/project/"
         exit 1
     fi
     
@@ -140,42 +140,33 @@ install_binary() {
         tar -xzf "$temp_dir/$archive_name" -C "$temp_dir"
     fi
     
-    # Check if we need sudo for installation
-    if [ -w "$INSTALL_DIR" ]; then
-        cp "$temp_dir/$filename" "$INSTALL_DIR/$BINARY_NAME"
-    else
-        warning "Need sudo privileges to install to $INSTALL_DIR"
-        sudo cp "$temp_dir/$filename" "$INSTALL_DIR/$BINARY_NAME"
-    fi
+    # Install locally in current directory
+    cp "$temp_dir/$filename" "$INSTALL_DIR/$BINARY_NAME"
     
     # Make executable
     if [ "$OS" != "windows" ]; then
-        if [ -w "$INSTALL_DIR/$BINARY_NAME" ]; then
-            chmod +x "$INSTALL_DIR/$BINARY_NAME"
-        else
-            sudo chmod +x "$INSTALL_DIR/$BINARY_NAME"
-        fi
+        chmod +x "$INSTALL_DIR/$BINARY_NAME"
     fi
     
     # Clean up
     rm -rf "$temp_dir"
     
-    success "Golem installed successfully to $INSTALL_DIR/$BINARY_NAME"
+    success "Golem installed successfully to $(pwd)/$BINARY_NAME"
 }
 
 # Verify installation
 verify_installation() {
-    if command -v $BINARY_NAME >/dev/null 2>&1; then
-        local installed_version=$($BINARY_NAME version 2>/dev/null || echo "unknown")
+    if [ -f "./$BINARY_NAME" ]; then
+        local installed_version=$(./golem version 2>/dev/null || echo "unknown")
         success "Installation verified: $installed_version"
         
-        info "You can now use golem:"
-        echo "  golem new my-app    # Create a new project"
-        echo "  golem dev           # Start development server"
-        echo "  golem build         # Build for production"
-        echo "  golem help          # Show help"
+        info "You can now use golem in this directory:"
+        echo "  ./golem new my-app    # Create a new project"
+        echo "  ./golem dev           # Start development server"  
+        echo "  ./golem build         # Build for production"
+        echo "  ./golem help          # Show help"
     else
-        error "Installation failed. $BINARY_NAME not found in PATH."
+        error "Installation failed. $BINARY_NAME not found in current directory."
     fi
 }
 
