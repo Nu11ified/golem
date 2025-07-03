@@ -78,32 +78,32 @@ This diagram details how Golem's reactive state management works. When an event 
 
 ```mermaid
 graph TD
-    subgraph "1. User Interaction"
+    subgraph "User Interaction"
         User["User"] -- "Clicks Button" --> DOMButton["DOM Button Element"];
     end
 
-    subgraph "2. Event Handling (Go in WASM)"
+    subgraph "Event Handling (Go in WASM)"
         DOMButton -- "Triggers 'onclick'" --> GoCallback["Go OnClick Callback"];
         GoCallback -- "Calls" --> StateSet["state.Set(newValue)"];
     end
 
-    subgraph "3. State Management (Observable)"
+    subgraph "State Management (Observable)"
         StateSet -- "Updates" --> Observable["Observable<T><br><i>Holds application state</i>"];
         Observable -- "Notifies" --> Subscriptions["Registered Subscriptions<br><i>(Callbacks)</i>"];
     end
 
-    subgraph "4. UI Update"
+    subgraph "UI Update"
         Subscriptions -- "Execute" --> UIUpdateFn["UI Update Function"];
         UIUpdateFn -- "Calls" --> ElementUpdate["element.Update(...)"];
     end
     
-    subgraph "5. Virtual DOM Diffing & Patching"
+    subgraph "Virtual DOM Diffing & Patching"
         ElementUpdate -- "Calculates minimal change" --> VDOM["Virtual DOM"];
         VDOM -- "Generates JS call" --> Patch["DOM Patch<br><i>e.g., element.textContent = 'new'</i>"];
         Patch -- "Applies changes to" --> RealDOM["Real DOM"];
     end
 
-    subgraph "6. Visual Feedback"
+    subgraph "Visual Feedback"
         RealDOM -- "Renders update" --> User;
     end
 
