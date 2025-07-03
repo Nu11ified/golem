@@ -109,8 +109,14 @@ export interface UserProfile {
 
 func (b *Builder) buildWasm() error {
 	// Build the WebAssembly binary
-	cmd := exec.Command("go", "build", "-o",
-		filepath.Join(b.config.Output, "app.wasm"))
+	// Use absolute path for the output
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get working directory: %v", err)
+	}
+	outputPath := filepath.Join(workingDir, b.config.Output, "app.wasm")
+
+	cmd := exec.Command("go", "build", "-o", outputPath)
 	cmd.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm")
 	cmd.Dir = filepath.Join(b.config.Output, "src/app")
 
@@ -125,8 +131,14 @@ func (b *Builder) buildWasm() error {
 
 func (b *Builder) buildServer() error {
 	// Build the gRPC server binary
-	cmd := exec.Command("go", "build", "-o",
-		filepath.Join(b.config.Output, "server"))
+	// Use absolute path for the output
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get working directory: %v", err)
+	}
+	outputPath := filepath.Join(workingDir, b.config.Output, "server")
+
+	cmd := exec.Command("go", "build", "-o", outputPath)
 	cmd.Dir = filepath.Join(b.config.Output, "src/server")
 
 	output, err := cmd.CombinedOutput()
