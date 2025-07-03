@@ -120,33 +120,59 @@ graph TD
     style RealDOM fill:#e8f0fe,stroke:#4285f4
 ```
 
-## Getting Started
+## Quick Start
 
-### Prerequisites
+### Installation
 
--   [Go](https://go.dev/doc/install) (version 1.21 or later)
--   [TinyGo](https://tinygo.org/getting-started/install/) (for compiling Go to WASM)
-
-### 1. Build the Golem CLI
-
-Clone this repository and build the command-line tool from the project root. This is a temporary step until the CLI is published.
-
+#### Option 1: One-line Install (Recommended)
 ```bash
-# Clone the repository
+curl -sSL https://raw.githubusercontent.com/Nu11ified/golem/main/install.sh | bash
+```
+
+#### Option 2: Manual Download
+1. Go to the [releases page](https://github.com/Nu11ified/golem/releases)
+2. Download the appropriate binary for your platform:
+   - **Linux (x64)**: `golem-v0.1.0-linux-amd64.tar.gz`
+   - **Linux (ARM64)**: `golem-v0.1.0-linux-arm64.tar.gz`
+   - **macOS (Intel)**: `golem-v0.1.0-darwin-amd64.tar.gz`
+   - **macOS (Apple Silicon)**: `golem-v0.1.0-darwin-arm64.tar.gz`
+   - **Windows (x64)**: `golem-v0.1.0-windows-amd64.zip`
+3. Extract the archive and move the binary to your PATH
+
+#### Option 3: Build from Source
+```bash
 git clone https://github.com/Nu11ified/golem.git
 cd golem
-
-# Build the CLI
 go build -o golem ./cmd/golem/main.go
 ```
-This will create a `golem` executable in the current directory.
+
+### Create Your First App
+
+```bash
+# Create a new project
+golem new my-golem-app
+
+# Navigate to the project
+cd my-golem-app
+
+# Start the development server
+golem dev
+```
+
+The server will start, compile your Go application to WebAssembly, and serve it. You can now access your application at `http://localhost:3000`.
+
+## Getting Started
+
+### 1. Installation
+
+Choose one of the installation methods above to get the `golem` CLI tool.
 
 ### 2. Create a New Project
 
-Use the newly built CLI to create a new Golem application.
+Use the CLI to create a new Golem application.
 
 ```bash
-./golem new my-golem-app
+golem new my-golem-app
 ```
 
 ### 3. Run the Development Server
@@ -155,7 +181,7 @@ Navigate into your new project and start the development server.
 
 ```bash
 cd my-golem-app
-../golem dev
+golem dev
 ```
 
 The server will start, compile your Go application to WebAssembly, and serve it. You can now access your application at `http://localhost:3000`.
