@@ -43,11 +43,11 @@ jobs:
           echo "Building for $GOOS/$GOARCH..."
           env GOOS="$GOOS" GOARCH="$GOARCH" go build -o "releases/$output_name" -ldflags="-s -w -X main.version=${{ steps.get_version.outputs.VERSION }}" ./cmd/golem/main.go
           
-          # Create compressed archive
+          # Create compressed archive and remove the raw binary
           if [ "$GOOS" = "windows" ]; then
-            (cd releases && zip "golem-${{ steps.get_version.outputs.VERSION }}-$GOOS-$GOARCH.zip" "$output_name")
+            (cd releases && zip "golem-${{ steps.get_version.outputs.VERSION }}-$GOOS-$GOARCH.zip" "$output_name" && rm "$output_name")
           else
-            (cd releases && tar -czf "golem-${{ steps.get_version.outputs.VERSION }}-$GOOS-$GOARCH.tar.gz" "$output_name")
+            (cd releases && tar -czf "golem-${{ steps.get_version.outputs.VERSION }}-$GOOS-$GOARCH.tar.gz" "$output_name" && rm "$output_name")
           fi
         done
     
@@ -55,7 +55,40 @@ jobs:
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
-        files: releases/*
+        files: |
+          releases/*.tar.gz
+          releases/*.zip
         generate_release_notes: true
+        name: Golem ${{ steps.get_version.outputs.VERSION }}
+        body: |
+          ## 🗿 Golem Framework ${{ steps.get_version.outputs.VERSION }}
+          
+          Download the appropriate binary for your platform:
+          
+          ### 📦 Quick Install
+          ```bash
+          curl -sSL https://raw.githubusercontent.com/Nu11ified/golem/main/install.sh | bash
+          ```
+          
+          ### 📱 Manual Download
+          - **Linux (x64)**: `golem-${{ steps.get_version.outputs.VERSION }}-linux-amd64.tar.gz`
+          - **Linux (ARM64)**: `golem-${{ steps.get_version.outputs.VERSION }}-linux-arm64.tar.gz`
+          - **macOS (Intel)**: `golem-${{ steps.get_version.outputs.VERSION }}-darwin-amd64.tar.gz`
+          - **macOS (Apple Silicon)**: `golem-${{ steps.get_version.outputs.VERSION }}-darwin-arm64.tar.gz`
+          - **Windows (x64)**: `golem-${{ steps.get_version.outputs.VERSION }}-windows-amd64.zip`
+          
+          ### 🚀 Getting Started
+          ```bash
+          # Extract the binary (example for Linux/macOS)
+          tar -xzf golem-${{ steps.get_version.outputs.VERSION }}-linux-amd64.tar.gz
+          
+          # Move to your PATH
+          sudo mv golem-${{ steps.get_version.outputs.VERSION }}-linux-amd64 /usr/local/bin/golem
+          
+          # Create your first app
+          golem new my-app
+          cd my-app
+          golem dev
+          ```
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

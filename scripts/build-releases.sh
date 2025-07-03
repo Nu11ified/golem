@@ -40,11 +40,11 @@ for platform in "${PLATFORMS[@]}"; do
     # Build binary
     env GOOS="$GOOS" GOARCH="$GOARCH" go build -o "$OUTPUT_DIR/$output_name" -ldflags="-s -w" ./cmd/golem/main.go
     
-    # Create compressed archive
+    # Create compressed archive and remove raw binary
     if [ "$GOOS" = "windows" ]; then
-        (cd "$OUTPUT_DIR" && zip "$BINARY_NAME-$VERSION-$GOOS-$GOARCH.zip" "$output_name")
+        (cd "$OUTPUT_DIR" && zip "$BINARY_NAME-$VERSION-$GOOS-$GOARCH.zip" "$output_name" && rm "$output_name")
     else
-        (cd "$OUTPUT_DIR" && tar -czf "$BINARY_NAME-$VERSION-$GOOS-$GOARCH.tar.gz" "$output_name")
+        (cd "$OUTPUT_DIR" && tar -czf "$BINARY_NAME-$VERSION-$GOOS-$GOARCH.tar.gz" "$output_name" && rm "$output_name")
     fi
     
     echo "✅ Built $output_name"
@@ -57,5 +57,10 @@ ls -la "$OUTPUT_DIR"
 
 echo ""
 echo "📋 To test locally:"
-echo "   chmod +x $OUTPUT_DIR/golem-$VERSION-$(go env GOOS)-$(go env GOARCH)"
-echo "   $OUTPUT_DIR/golem-$VERSION-$(go env GOOS)-$(go env GOARCH) version" 
+echo "   # Extract the archive for your platform:"
+if [ "$(go env GOOS)" = "windows" ]; then
+    echo "   unzip $OUTPUT_DIR/golem-$VERSION-$(go env GOOS)-$(go env GOARCH).zip"
+else
+    echo "   tar -xzf $OUTPUT_DIR/golem-$VERSION-$(go env GOOS)-$(go env GOARCH).tar.gz"
+fi
+echo "   # Then run: ./golem-$VERSION-$(go env GOOS)-$(go env GOARCH) version" 
