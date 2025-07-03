@@ -95,7 +95,13 @@ get_latest_version() {
     fi
     
     if [ -z "$LATEST_VERSION" ]; then
-        error "Failed to get latest version"
+        warning "No releases found. This might be a new repository."
+        info "You can build from source instead:"
+        echo "  git clone https://github.com/$REPO.git"
+        echo "  cd golem"
+        echo "  go build -o golem ./cmd/golem"
+        echo "  sudo mv golem /usr/local/bin/"
+        exit 1
     fi
     
     info "Latest version: $LATEST_VERSION"
