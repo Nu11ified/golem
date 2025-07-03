@@ -1,8 +1,10 @@
 package dev
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -11,35 +13,123 @@ import (
 	"time"
 
 	"github.com/Nu11ified/golem/internal/config"
+	"github.com/Nu11ified/golem/internal/functions"
 	"nhooyr.io/websocket"
 )
 
 // Server represents the development server
 type Server struct {
-	config *config.Config
+	config   *config.Config
+	registry *functions.Registry
 }
 
 // NewServer creates a new development server
 func NewServer(config *config.Config) *Server {
 	return &Server{
-		config: config,
+		config:   config,
+		registry: functions.NewRegistry(),
 	}
 }
 
-// Start starts the development server with hot reload
+// Start starts the development server with hot reload and gRPC support
 func (s *Server) Start() error {
 	port := s.config.Dev.Port
+
+	// Initialize function registry for development
+	if err := s.initializeFunctionRegistry(); err != nil {
+		log.Printf("Warning: Failed to initialize function registry: %v", err)
+	}
 
 	// Set up file watcher for hot reload
 	if s.config.Dev.HotReload {
 		go s.watchFiles()
 	}
 
+	// Start gRPC server in background for development
+	go s.startDevGRPCServer()
+
 	// Set up HTTP handlers
 	mux := http.NewServeMux()
 
 	// Serve static files
 	mux.Handle("/", s.createStaticHandler())
+
+	// API endpoint for function calls during development
+	grpcServer := functions.NewGRPCServer(s.registry)
+	mux.HandleFunc("/api/functions", grpcServer.HTTPHandler())
+
+	// API root endpoint - show available endpoints
+	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/" {
+			http.NotFound(w, r)
+			return
+		}
+
+		if r.Method == "OPTIONS" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Content-Type", "application/json")
+
+		// Get registered functions for display
+		functions := s.registry.ListFunctions("")
+
+		apiInfo := map[string]interface{}{
+			"message": "Golem Development API",
+			"version": "0.1.0",
+			"endpoints": map[string]interface{}{
+				"GET /api/":               "This endpoint - API information",
+				"GET /api/functions/list": "List all registered server functions",
+				"POST /api/functions":     "Call a server function",
+			},
+			"registered_functions": len(functions),
+			"functions":            functions,
+			"example_call": map[string]interface{}{
+				"url":    "/api/functions",
+				"method": "POST",
+				"headers": map[string]string{
+					"Content-Type": "application/json",
+				},
+				"body": map[string]interface{}{
+					"serviceName":  "server",
+					"functionName": "Hello",
+					"args":         []interface{}{"World"},
+				},
+			},
+			"grpc_server": map[string]interface{}{
+				"port": s.config.Server.GRPC.Port,
+				"url":  fmt.Sprintf("localhost:%d", s.config.Server.GRPC.Port),
+			},
+		}
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(apiInfo)
+	})
+
+	// List functions endpoint for development debugging
+	mux.HandleFunc("/api/functions/list", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Content-Type", "application/json")
+
+		functions := s.registry.ListFunctions("")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"functions": functions,
+		})
+	})
 
 	// WebSocket endpoint for hot reload
 	if s.config.Dev.HotReload {
@@ -48,12 +138,140 @@ func (s *Server) Start() error {
 
 	fmt.Printf("🌟 Golem dev server running at http://localhost:%d\n", port)
 	fmt.Println("📁 Serving files from:", s.config.Output)
+	fmt.Printf("🔗 API endpoints available at: http://localhost:%d/api/\n", port)
 
 	if s.config.Dev.HotReload {
 		fmt.Println("🔥 Hot reload enabled")
 	}
 
 	return http.ListenAndServe(fmt.Sprintf(":%d", port), mux)
+}
+
+func (s *Server) initializeFunctionRegistry() error {
+	// Discover functions from the server directory
+	serverDir := s.config.Server.Functions
+	if serverDir == "" {
+		serverDir = "src/server"
+	}
+
+	if err := s.registry.DiscoverFunctions(serverDir); err != nil {
+		log.Printf("Warning: Failed to discover functions from %s: %v", serverDir, err)
+	}
+
+	// Register user functions from the server package
+	if err := s.registerUserFunctions(); err != nil {
+		log.Printf("Warning: Failed to register user functions: %v", err)
+	}
+
+	log.Printf("🎯 Function registry initialized with %d functions", len(s.registry.ListFunctions("")))
+	return nil
+}
+
+// registerUserFunctions registers functions from the user's server package
+func (s *Server) registerUserFunctions() error {
+	// First, try to build and import server packages to trigger their init() functions
+	serverDir := s.config.Server.Functions
+	if serverDir == "" {
+		serverDir = "src/server"
+	}
+
+	// Build and import server packages (this will trigger init() functions)
+	if err := s.registry.BuildAndImportServerPackages(serverDir); err != nil {
+		log.Printf("Warning: Could not build server packages: %v", err)
+	}
+
+	// For development mode, register demo functions directly if they exist
+	if err := s.registerDemoFunctions(); err != nil {
+		log.Printf("Warning: Could not register demo functions: %v", err)
+	}
+
+	// Copy all functions from the global registry to this server's registry
+	if err := s.registry.RegisterFromGlobal(); err != nil {
+		return fmt.Errorf("failed to register functions from global registry: %w", err)
+	}
+
+	// Log registered functions
+	registeredFunctions := s.registry.ListFunctions("")
+	log.Printf("Successfully registered %d server functions:", len(registeredFunctions))
+	for _, fn := range registeredFunctions {
+		log.Printf("  - %s.%s", fn.ServiceName, fn.Name)
+	}
+
+	return nil
+}
+
+// registerDemoFunctions registers demo functions directly for development
+func (s *Server) registerDemoFunctions() error {
+	// Define demo functions that match the ones in the server package
+	helloFunc := func(name string) string {
+		return fmt.Sprintf("Hello, %s! This message is from the Go server.", name)
+	}
+
+	getUserProfileFunc := func(userID int) (map[string]interface{}, error) {
+		if userID <= 0 {
+			return nil, fmt.Errorf("invalid user ID: %d", userID)
+		}
+		return map[string]interface{}{
+			"id":    userID,
+			"name":  "John Doe",
+			"email": "john@example.com",
+			"role":  "admin",
+		}, nil
+	}
+
+	calculateFunc := func(a, b float64, operation string) (float64, error) {
+		switch operation {
+		case "add":
+			return a + b, nil
+		case "subtract":
+			return a - b, nil
+		case "multiply":
+			return a * b, nil
+		case "divide":
+			if b == 0 {
+				return 0, fmt.Errorf("division by zero")
+			}
+			return a / b, nil
+		default:
+			return 0, fmt.Errorf("unknown operation: %s", operation)
+		}
+	}
+
+	// Register the demo functions
+	if err := s.registry.RegisterFunction("server", "Hello", helloFunc); err != nil {
+		return fmt.Errorf("failed to register Hello function: %w", err)
+	}
+
+	if err := s.registry.RegisterFunction("server", "GetUserProfile", getUserProfileFunc); err != nil {
+		return fmt.Errorf("failed to register GetUserProfile function: %w", err)
+	}
+
+	if err := s.registry.RegisterFunction("server", "Calculate", calculateFunc); err != nil {
+		return fmt.Errorf("failed to register Calculate function: %w", err)
+	}
+
+	log.Printf("Registered demo functions for development")
+	return nil
+}
+
+func (s *Server) startDevGRPCServer() {
+	port := s.config.Server.GRPC.Port
+	if port == 0 {
+		port = 50051
+	}
+
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		log.Printf("Warning: Failed to start dev gRPC server: %v", err)
+		return
+	}
+
+	grpcServer := functions.CreateGRPCServer(s.registry)
+	fmt.Printf("🔧 Dev gRPC server running at localhost:%d\n", port)
+
+	if err := grpcServer.Serve(listener); err != nil {
+		log.Printf("Dev gRPC server error: %v", err)
+	}
 }
 
 func (s *Server) createStaticHandler() http.Handler {
@@ -138,7 +356,7 @@ func (s *Server) generateDevHTML() string {
     </style>
 </head>
 <body>
-    <div class="dev-banner">🔥 Development Mode - Hot Reload Enabled</div>
+    <div class="dev-banner">🔥 Development Mode - Hot Reload Enabled | gRPC Server Active</div>
     <div id="app">Loading Golem app...</div>
     <script src="wasm_exec.js?` + cacheBuster + `"></script>
     <script>
@@ -180,6 +398,17 @@ func (s *Server) generateDevHTML() string {
 }
 
 func (s *Server) buildDevWasm() error {
+	// First, ensure server packages are discovered and import file is generated
+	serverDir := s.config.Server.Functions
+	if serverDir == "" {
+		serverDir = "src/server"
+	}
+
+	// Generate server imports file
+	if err := s.registry.BuildAndImportServerPackages(serverDir); err != nil {
+		log.Printf("Warning: Could not generate server imports: %v", err)
+	}
+
 	// Find wasm_exec.js from Go installation.
 	var wasmExecSrc string
 	goRootCmd := exec.Command("go", "env", "GOROOT")
@@ -286,7 +515,7 @@ if (typeof module !== 'undefined' && module.exports) {
 	}
 
 	// Build the WebAssembly file
-	fmt.Println("🔨 Building WebAssembly...")
+	fmt.Println("🔨 Building WebAssembly with server functions...")
 
 	// Set environment variables for WebAssembly build
 	env := append(os.Environ(),
@@ -297,11 +526,17 @@ if (typeof module !== 'undefined' && module.exports) {
 	// Build command: go build -o app.wasm ./src/app/main.go
 	wasmOutput := filepath.Join(devDir, "app.wasm")
 
-	// Create a simple Go build command
+	// Create a temporary main.go that imports server packages
+	tempMainFile := filepath.Join(devDir, "main.go")
+	if err := s.createWasmMainFile(tempMainFile); err != nil {
+		return fmt.Errorf("failed to create WASM main file: %v", err)
+	}
+
+	// Build the WASM file from the temporary main
 	buildArgs := []string{
 		"build",
 		"-o", wasmOutput,
-		"./src/app/main.go",
+		tempMainFile,
 	}
 
 	// Execute go build
@@ -315,8 +550,54 @@ if (typeof module !== 'undefined' && module.exports) {
 		return fmt.Errorf("WebAssembly build failed: %v", err)
 	}
 
-	fmt.Println("✅ WebAssembly build completed")
+	fmt.Println("✅ WebAssembly build completed with server functions")
 	return nil
+}
+
+// createWasmMainFile creates a main.go file that imports both app and server packages
+func (s *Server) createWasmMainFile(mainFile string) error {
+	// Read the original main.go to get its content
+	originalMain, err := os.ReadFile("src/app/main.go")
+	if err != nil {
+		return fmt.Errorf("failed to read original main.go: %v", err)
+	}
+
+	// Get module name for proper imports
+	moduleName, err := functions.GetModuleName()
+	if err != nil {
+		return fmt.Errorf("failed to get module name: %v", err)
+	}
+
+	// Create a new main.go that imports server packages
+	content := fmt.Sprintf(`//go:build js && wasm
+
+// Auto-generated main.go for WASM build with server functions
+package main
+
+import (
+	_ "%s/src/server" // Import server package to trigger function registration
+)
+
+// Include the original main.go content below
+`, moduleName)
+
+	// Append the original main.go content, but remove its package declaration
+	originalContent := string(originalMain)
+	lines := strings.Split(originalContent, "\n")
+	var filteredLines []string
+
+	for i, line := range lines {
+		// Skip the package main line from original file
+		if i == 0 && strings.HasPrefix(strings.TrimSpace(line), "package main") {
+			continue
+		}
+		filteredLines = append(filteredLines, line)
+	}
+
+	content += strings.Join(filteredLines, "\n")
+
+	// Write the combined main.go
+	return os.WriteFile(mainFile, []byte(content), 0644)
 }
 
 func (s *Server) watchFiles() {

@@ -11,6 +11,7 @@ import (
 func App() *dom.Element {
 	return dom.Div(
 		dom.Class("container"),
+		components.ServerDemoComponent(),
 		components.TodoListComponent(),
 		components.CounterComponent(),
 	)
@@ -78,9 +79,9 @@ func InjectGlobalStyles() {
 		}
 	`)
 
-	// --- TODO APP STYLES ---
+	// --- APP STYLES ---
 	sb.WriteString(`
-		.todo-app, .counter-app {
+		.todo-app, .counter-app, .server-demo-app {
 			background-color: var(--surface);
 			border-radius: 8px;
 			padding: 1.5rem 2rem;
@@ -180,6 +181,78 @@ func InjectGlobalStyles() {
 		}
 		.counter-app > button {
 			margin-right: 0.5rem;
+		}
+	`)
+
+	// --- SERVER DEMO STYLES ---
+	sb.WriteString(`
+		.server-demo-app .demo-section {
+			margin-bottom: 2rem;
+			padding-bottom: 1.5rem;
+			border-bottom: 1px solid var(--border);
+		}
+		.server-demo-app .demo-section:last-of-type {
+			border-bottom: none;
+		}
+		.server-demo-app .input-group {
+			display: flex;
+			gap: 0.75rem;
+			align-items: center;
+			margin-bottom: 1rem;
+		}
+		.server-demo-app .input-group label {
+			min-width: 100px;
+			font-weight: 500;
+		}
+		.server-demo-app .input-group input {
+			flex-grow: 1;
+			background: var(--background);
+			border: 1px solid var(--border);
+			color: var(--text-primary);
+			padding: 0.5rem 0.75rem;
+			border-radius: 6px;
+			font-size: 0.9rem;
+		}
+		.server-demo-app .user-profile, .server-demo-app .hello-response {
+			background-color: var(--background);
+			color: var(--text-primary);
+			padding: 1rem;
+			border-radius: 6px;
+			margin-top: 1rem;
+		}
+		.server-demo-app .status-message {
+			background-color: var(--background);
+			color: var(--text-primary);
+			padding: 0.75rem;
+			border-radius: 6px;
+			margin: 1rem 0;
+			border-left: 4px solid var(--danger);
+		}
+		.server-demo-app .status-message.success {
+			border-left-color: var(--success);
+		}
+		.server-demo-app .loading {
+			background-color: var(--background);
+			color: var(--text-primary);
+			padding: 0.75rem;
+			border-radius: 6px;
+			text-align: center;
+			margin: 1rem 0;
+			animation: pulse 1.5s infinite;
+		}
+		.server-demo-app .info-section ul {
+			background-color: var(--background);
+			color: var(--text-primary);
+			padding: 1rem;
+			border-radius: 6px;
+		}
+		.server-demo-app .info-section li {
+			background: transparent;
+			padding: 0.25rem 0;
+		}
+		@keyframes pulse {
+			0%, 100% { opacity: 1; }
+			50% { opacity: 0.7; }
 		}
 	`)
 

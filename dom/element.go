@@ -132,6 +132,8 @@ func (e *Element) Render() js.Value {
 				e.JSElement.Set("id", value)
 			case "textContent":
 				e.JSElement.Set("textContent", value)
+			case "value":
+				e.JSElement.Set("value", value)
 			case "checked", "autofocus":
 				e.JSElement.Set(name, value)
 			default:
@@ -173,6 +175,8 @@ func (e *Element) Update(newProps map[string]interface{}) {
 					e.JSElement.Set("id", newValue)
 				case "textContent":
 					e.JSElement.Set("textContent", newValue)
+				case "value":
+					e.JSElement.Set("value", newValue)
 				default:
 					e.JSElement.Call("setAttribute", name, fmt.Sprintf("%v", newValue))
 				}
@@ -196,6 +200,10 @@ func Text(text interface{}) Attribute {
 
 func Placeholder(text string) Attribute {
 	return Attribute{Name: "placeholder", Value: text}
+}
+
+func Value(value string) Attribute {
+	return Attribute{Name: "value", Value: value}
 }
 
 func Autofocus(focus bool) Attribute {
@@ -254,6 +262,14 @@ func H2(args ...interface{}) *Element {
 	return NewElement("h2", args...)
 }
 
+func H3(args ...interface{}) *Element {
+	return NewElement("h3", args...)
+}
+
+func H4(args ...interface{}) *Element {
+	return NewElement("h4", args...)
+}
+
 func P(args ...interface{}) *Element {
 	return NewElement("p", args...)
 }
@@ -289,6 +305,10 @@ func Ul(args ...interface{}) *Element {
 
 func Li(args ...interface{}) *Element {
 	return NewElement("li", args...)
+}
+
+func Label(args ...interface{}) *Element {
+	return NewElement("label", args...)
 }
 
 // Render renders an element tree to a target selector

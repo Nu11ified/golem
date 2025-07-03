@@ -6,88 +6,52 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"syscall/js"
+	"time"
 )
 
-// Client provides seamless server function calling via gRPC-Web
+// Client provides seamless server function calling from frontend
 type Client struct {
 	baseURL string
-	headers map[string]string
-	timeout int // milliseconds
+	timeout time.Duration
 }
 
-// NewClient creates a new gRPC-Web client
+// NewClient creates a new client for calling server functions
 func NewClient(baseURL string) *Client {
 	return &Client{
 		baseURL: baseURL,
-		headers: make(map[string]string),
-		timeout: 30000, // 30 seconds default
+		timeout: 30 * time.Second,
 	}
 }
 
-// SetHeader sets a header for all requests
-func (c *Client) SetHeader(key, value string) {
-	c.headers[key] = value
-}
-
-// SetTimeout sets the request timeout in milliseconds
-func (c *Client) SetTimeout(timeout int) {
+// SetTimeout sets the request timeout
+func (c *Client) SetTimeout(timeout time.Duration) {
 	c.timeout = timeout
 }
 
-// Call invokes a server function via gRPC-Web
-func (c *Client) Call(ctx context.Context, serviceName, methodName string, req interface{}) (interface{}, error) {
-	// Serialize request
-	reqData, err := json.Marshal(req)
+// Call invokes a server function with automatic argument marshaling
+func (c *Client) Call(ctx context.Context, serviceName, functionName string, args ...interface{}) (interface{}, error) {
+	// Create the request payload
+	requestData := map[string]interface{}{
+		"functionName": functionName,
+		"serviceName":  serviceName,
+		"args":         args,
+	}
+
+	// Convert to JSON
+	jsonData, err := json.Marshal(requestData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Create promise-based fetch call
-	promise := c.createFetchPromise(serviceName, methodName, reqData)
+	// Make the HTTP request using fetch
+	return c.makeRequest(ctx, jsonData)
+}
 
-	// Convert JS Promise to Go channel
+// makeRequest performs the actual HTTP request using JavaScript fetch
+func (c *Client) makeRequest(ctx context.Context, jsonData []byte) (interface{}, error) {
+	// Create a promise-based approach
 	resultChan := make(chan fetchResult, 1)
-
-	// Handle promise resolution
-	promise.Call("then", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		if len(args) > 0 {
-			response := args[0]
-			resultChan <- fetchResult{response: response}
-		}
-		return nil
-	}))
-
-	// Handle promise rejection
-	promise.Call("catch", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		if len(args) > 0 {
-			err := fmt.Errorf("fetch error: %s", args[0].String())
-			resultChan <- fetchResult{error: err}
-		}
-		return nil
-	}))
-
-	// Wait for result or context cancellation
-	select {
-	case result := <-resultChan:
-		if result.error != nil {
-			return nil, result.error
-		}
-		return c.parseResponse(result.response)
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
-}
-
-type fetchResult struct {
-	response js.Value
-	error    error
-}
-
-// createFetchPromise creates a JavaScript fetch promise for gRPC-Web
-func (c *Client) createFetchPromise(serviceName, methodName string, reqData []byte) js.Value {
-	url := fmt.Sprintf("%s/%s/%s", c.baseURL, serviceName, methodName)
 
 	// Create fetch options
 	options := js.Global().Get("Object").New()
@@ -98,261 +62,265 @@ func (c *Client) createFetchPromise(serviceName, methodName string, reqData []by
 	headers := js.Global().Get("Object").New()
 	headers.Set("Content-Type", "application/json")
 	headers.Set("Accept", "application/json")
-
-	// Add custom headers
-	for key, value := range c.headers {
-		headers.Set(key, value)
-	}
-
 	options.Set("headers", headers)
 
 	// Set body
-	uint8Array := js.Global().Get("Uint8Array").New(len(reqData))
-	js.CopyBytesToJS(uint8Array, reqData)
-	options.Set("body", uint8Array)
+	options.Set("body", string(jsonData))
 
-	// Create fetch promise
-	return js.Global().Call("fetch", url, options)
+	// Build the URL
+	url := fmt.Sprintf("%s/api/functions", c.baseURL)
+
+	// Debug logging
+	fmt.Printf("🌐 gRPC Client Debug:\n")
+	fmt.Printf("  baseURL: '%s'\n", c.baseURL)
+	fmt.Printf("  Final URL: '%s'\n", url)
+	fmt.Printf("  Request body: %s\n", string(jsonData))
+
+	// Make the fetch call
+	promise := js.Global().Call("fetch", url, options)
+
+	// Handle promise resolution
+	var thenFunc js.Func
+	thenFunc = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		defer thenFunc.Release() // Release after callback completes
+		if len(args) > 0 {
+			response := args[0]
+			fmt.Printf("📥 HTTP Response: status=%d, ok=%t\n", response.Get("status").Int(), response.Get("ok").Bool())
+			// Process the response synchronously to avoid race conditions
+			c.processResponse(response, resultChan)
+		}
+		return nil
+	})
+
+	// Handle promise rejection
+	var catchFunc js.Func
+	catchFunc = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		defer catchFunc.Release() // Release after callback completes
+		if len(args) > 0 {
+			err := fmt.Errorf("fetch error: %s", args[0].String())
+			fmt.Printf("❌ Fetch error: %v\n", err)
+			resultChan <- fetchResult{error: err}
+		}
+		return nil
+	})
+
+	promise.Call("then", thenFunc).Call("catch", catchFunc)
+
+	// Wait for result or context cancellation
+	select {
+	case result := <-resultChan:
+		if result.error != nil {
+			fmt.Printf("❌ Final error: %v\n", result.error)
+			return nil, result.error
+		}
+		fmt.Printf("✅ Final result: %+v\n", result.data)
+		return result.data, nil
+	case <-ctx.Done():
+		fmt.Printf("❌ Context cancelled: %v\n", ctx.Err())
+		return nil, ctx.Err()
+	case <-time.After(c.timeout):
+		fmt.Printf("❌ Request timeout after %v\n", c.timeout)
+		return nil, fmt.Errorf("request timeout after %v", c.timeout)
+	}
 }
 
-// parseResponse parses the fetch response
-func (c *Client) parseResponse(response js.Value) (interface{}, error) {
+type fetchResult struct {
+	data  interface{}
+	error error
+}
+
+// processResponse processes the fetch response synchronously
+func (c *Client) processResponse(response js.Value, resultChan chan<- fetchResult) {
 	// Check if response is ok
 	if !response.Get("ok").Bool() {
 		status := response.Get("status").Int()
 		statusText := response.Get("statusText").String()
-		return nil, fmt.Errorf("HTTP %d: %s", status, statusText)
+		resultChan <- fetchResult{error: fmt.Errorf("HTTP %d: %s", status, statusText)}
+		return
 	}
 
 	// Get response text
-	textPromise := response.Call("text")
+	textPromise := response.Call("json")
 
-	// Convert promise to channel
-	textChan := make(chan string, 1)
-	errorChan := make(chan error, 1)
-
-	textPromise.Call("then", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+	// Handle text promise with proper function lifecycle
+	var thenFunc js.Func
+	thenFunc = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		defer thenFunc.Release()
 		if len(args) > 0 {
-			textChan <- args[0].String()
+			jsonResponse := args[0]
+
+			// Convert JS object to Go map
+			result := jsValueToInterface(jsonResponse)
+
+			// Check if the response indicates success
+			if respMap, ok := result.(map[string]interface{}); ok {
+				if success, exists := respMap["success"]; exists && success == true {
+					if resultData, exists := respMap["result"]; exists {
+						resultChan <- fetchResult{data: resultData}
+						return nil
+					}
+				}
+				if errorMsg, exists := respMap["error"]; exists {
+					resultChan <- fetchResult{error: fmt.Errorf("server error: %v", errorMsg)}
+					return nil
+				}
+			}
+
+			resultChan <- fetchResult{data: result}
 		}
 		return nil
-	}))
+	})
 
-	textPromise.Call("catch", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+	var catchFunc js.Func
+	catchFunc = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		defer catchFunc.Release()
 		if len(args) > 0 {
-			errorChan <- fmt.Errorf("text parsing error: %s", args[0].String())
+			err := fmt.Errorf("response parsing error: %s", args[0].String())
+			resultChan <- fetchResult{error: err}
 		}
 		return nil
-	}))
+	})
 
-	// Wait for result
-	select {
-	case text := <-textChan:
-		var result interface{}
-		if err := json.Unmarshal([]byte(text), &result); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	textPromise.Call("then", thenFunc).Call("catch", catchFunc)
+}
+
+// jsValueToInterface converts a JavaScript value to a Go interface{}
+func jsValueToInterface(val js.Value) interface{} {
+	switch val.Type() {
+	case js.TypeString:
+		return val.String()
+	case js.TypeNumber:
+		return val.Float()
+	case js.TypeBoolean:
+		return val.Bool()
+	case js.TypeObject:
+		if val.IsNull() {
+			return nil
 		}
-		return result, nil
-	case err := <-errorChan:
+		// Handle arrays
+		if val.Get("length").Type() != js.TypeUndefined {
+			length := val.Get("length").Int()
+			arr := make([]interface{}, length)
+			for i := 0; i < length; i++ {
+				arr[i] = jsValueToInterface(val.Index(i))
+			}
+			return arr
+		}
+		// Handle objects
+		obj := make(map[string]interface{})
+		keys := js.Global().Get("Object").Call("keys", val)
+		for i := 0; i < keys.Get("length").Int(); i++ {
+			key := keys.Index(i).String()
+			obj[key] = jsValueToInterface(val.Get(key))
+		}
+		return obj
+	case js.TypeNull, js.TypeUndefined:
+		return nil
+	default:
+		return val.String()
+	}
+}
+
+// Convenience functions for common patterns
+
+// CallString calls a function and expects a string result
+func (c *Client) CallString(ctx context.Context, serviceName, functionName string, args ...interface{}) (string, error) {
+	result, err := c.Call(ctx, serviceName, functionName, args...)
+	if err != nil {
+		return "", err
+	}
+	if str, ok := result.(string); ok {
+		return str, nil
+	}
+	return fmt.Sprintf("%v", result), nil
+}
+
+// CallMap calls a function and expects a map result
+func (c *Client) CallMap(ctx context.Context, serviceName, functionName string, args ...interface{}) (map[string]interface{}, error) {
+	result, err := c.Call(ctx, serviceName, functionName, args...)
+	if err != nil {
 		return nil, err
 	}
-}
-
-// ServerFunction provides a high-level interface for calling server functions
-type ServerFunction struct {
-	client      *Client
-	serviceName string
-	methodName  string
-}
-
-// NewServerFunction creates a new server function caller
-func NewServerFunction(client *Client, serviceName, methodName string) *ServerFunction {
-	return &ServerFunction{
-		client:      client,
-		serviceName: serviceName,
-		methodName:  methodName,
+	if m, ok := result.(map[string]interface{}); ok {
+		return m, nil
 	}
+	return nil, fmt.Errorf("result is not a map: %T", result)
 }
 
-// Call invokes the server function with automatic type handling
-func (sf *ServerFunction) Call(ctx context.Context, args ...interface{}) (interface{}, error) {
-	// Handle different argument patterns
-	var req interface{}
-
-	switch len(args) {
-	case 0:
-		req = struct{}{}
-	case 1:
-		req = args[0]
+// CallInt calls a function and expects an integer result
+func (c *Client) CallInt(ctx context.Context, serviceName, functionName string, args ...interface{}) (int, error) {
+	result, err := c.Call(ctx, serviceName, functionName, args...)
+	if err != nil {
+		return 0, err
+	}
+	switch v := result.(type) {
+	case int:
+		return v, nil
+	case float64:
+		return int(v), nil
+	case string:
+		// Try to parse as number if it's a string
+		return 0, fmt.Errorf("cannot convert string to int: %s", v)
 	default:
-		// Multiple arguments - wrap in struct
-		req = map[string]interface{}{
-			"args": args,
-		}
-	}
-
-	return sf.client.Call(ctx, sf.serviceName, sf.methodName, req)
-}
-
-// CallWithResult invokes the server function and unmarshals result into target
-func (sf *ServerFunction) CallWithResult(ctx context.Context, target interface{}, args ...interface{}) error {
-	result, err := sf.Call(ctx, args...)
-	if err != nil {
-		return err
-	}
-
-	// Marshal and unmarshal to handle type conversion
-	data, err := json.Marshal(result)
-	if err != nil {
-		return fmt.Errorf("failed to marshal result: %w", err)
-	}
-
-	if err := json.Unmarshal(data, target); err != nil {
-		return fmt.Errorf("failed to unmarshal into target: %w", err)
-	}
-
-	return nil
-}
-
-// Registry manages server function registrations
-type Registry struct {
-	functions map[string]*ServerFunction
-	client    *Client
-}
-
-// NewRegistry creates a new function registry
-func NewRegistry(client *Client) *Registry {
-	return &Registry{
-		functions: make(map[string]*ServerFunction),
-		client:    client,
+		return 0, fmt.Errorf("result is not a number: %T", result)
 	}
 }
 
-// Register registers a server function
-func (r *Registry) Register(name, serviceName, methodName string) {
-	r.functions[name] = NewServerFunction(r.client, serviceName, methodName)
-}
-
-// Call calls a registered server function
-func (r *Registry) Call(ctx context.Context, name string, args ...interface{}) (interface{}, error) {
-	fn, exists := r.functions[name]
-	if !exists {
-		return nil, fmt.Errorf("server function %s not registered", name)
-	}
-
-	return fn.Call(ctx, args...)
-}
-
-// CallWithResult calls a registered server function with result unmarshaling
-func (r *Registry) CallWithResult(ctx context.Context, name string, target interface{}, args ...interface{}) error {
-	fn, exists := r.functions[name]
-	if !exists {
-		return fmt.Errorf("server function %s not registered", name)
-	}
-
-	return fn.CallWithResult(ctx, target, args...)
-}
-
-// Auto-registration helpers
-func (r *Registry) RegisterServerPackage(packageName string, functions map[string]string) {
-	for goFuncName, grpcMethodName := range functions {
-		r.Register(goFuncName, packageName, grpcMethodName)
-	}
-}
-
-// Type-safe server function calling with reflection
-type TypedCall struct {
-	registry *Registry
-}
-
-// NewTypedCall creates a new typed caller
-func NewTypedCall(registry *Registry) *TypedCall {
-	return &TypedCall{registry: registry}
-}
-
-// Call provides type-safe server function calling
-func (tc *TypedCall) Call(ctx context.Context, fnName string, args interface{}, result interface{}) error {
-	// Use reflection to validate types
-	resultValue := reflect.ValueOf(result)
-
-	if resultValue.Kind() != reflect.Ptr {
-		return fmt.Errorf("result must be a pointer")
-	}
-
-	return tc.registry.CallWithResult(ctx, fnName, result, args)
-}
-
-// Streaming support for real-time updates
-type Stream struct {
-	client      *Client
-	serviceName string
-	methodName  string
-	onMessage   func(interface{})
-	onError     func(error)
-	onClose     func()
-}
-
-// NewStream creates a new gRPC stream
-func NewStream(client *Client, serviceName, methodName string) *Stream {
-	return &Stream{
-		client:      client,
-		serviceName: serviceName,
-		methodName:  methodName,
-	}
-}
-
-// OnMessage sets the message handler
-func (s *Stream) OnMessage(handler func(interface{})) *Stream {
-	s.onMessage = handler
-	return s
-}
-
-// OnError sets the error handler
-func (s *Stream) OnError(handler func(error)) *Stream {
-	s.onError = handler
-	return s
-}
-
-// OnClose sets the close handler
-func (s *Stream) OnClose(handler func()) *Stream {
-	s.onClose = handler
-	return s
-}
-
-// Start starts the stream
-func (s *Stream) Start(ctx context.Context, req interface{}) error {
-	// Implementation would use WebSocket or Server-Sent Events
-	// for streaming gRPC communication
-	return fmt.Errorf("streaming not yet implemented")
-}
-
-// Global client instance for easy access
+// Global client instance for convenience
 var defaultClient *Client
-var defaultRegistry *Registry
 
 // SetDefaultClient sets the global default client
-func SetDefaultClient(client *Client) {
-	defaultClient = client
-	defaultRegistry = NewRegistry(client)
+func SetDefaultClient(baseURL string) {
+	defaultClient = NewClient(baseURL)
 }
 
-// GetDefaultRegistry returns the default registry
-func GetDefaultRegistry() *Registry {
-	return defaultRegistry
+// GetDefaultClient returns the default client
+func GetDefaultClient() *Client {
+	return defaultClient
 }
 
-// Call is a convenience function for calling server functions
-func Call(ctx context.Context, name string, args ...interface{}) (interface{}, error) {
-	if defaultRegistry == nil {
-		return nil, fmt.Errorf("no default client configured")
+// Convenience functions using the default client
+
+// Call is a convenience function for calling server functions with the default client
+func Call(ctx context.Context, serviceName, functionName string, args ...interface{}) (interface{}, error) {
+	if defaultClient == nil {
+		// Auto-initialize with current origin if not configured
+		fmt.Printf("🔗 Auto-initializing gRPC client with empty baseURL\n")
+		defaultClient = NewClient("")
+		fmt.Printf("🔗 Golem gRPC client auto-initialized (baseURL: '%s', timeout: %v)\n", defaultClient.baseURL, defaultClient.timeout)
 	}
-	return defaultRegistry.Call(ctx, name, args...)
+	return defaultClient.Call(ctx, serviceName, functionName, args...)
 }
 
-// CallWithResult is a convenience function for calling server functions with result unmarshaling
-func CallWithResult(ctx context.Context, name string, target interface{}, args ...interface{}) error {
-	if defaultRegistry == nil {
-		return fmt.Errorf("no default client configured")
+// CallString is a convenience function for calling server functions that return strings
+func CallString(ctx context.Context, serviceName, functionName string, args ...interface{}) (string, error) {
+	if defaultClient == nil {
+		// Auto-initialize with current origin if not configured
+		fmt.Printf("🔗 Auto-initializing gRPC client with empty baseURL\n")
+		defaultClient = NewClient("")
+		fmt.Printf("🔗 Golem gRPC client auto-initialized (baseURL: '%s', timeout: %v)\n", defaultClient.baseURL, defaultClient.timeout)
 	}
-	return defaultRegistry.CallWithResult(ctx, name, target, args...)
+	return defaultClient.CallString(ctx, serviceName, functionName, args...)
+}
+
+// CallMap is a convenience function for calling server functions that return maps
+func CallMap(ctx context.Context, serviceName, functionName string, args ...interface{}) (map[string]interface{}, error) {
+	if defaultClient == nil {
+		// Auto-initialize with current origin if not configured
+		fmt.Printf("🔗 Auto-initializing gRPC client with empty baseURL\n")
+		defaultClient = NewClient("")
+		fmt.Printf("🔗 Golem gRPC client auto-initialized (baseURL: '%s', timeout: %v)\n", defaultClient.baseURL, defaultClient.timeout)
+	}
+	return defaultClient.CallMap(ctx, serviceName, functionName, args...)
+}
+
+// CallInt is a convenience function for calling server functions that return integers
+func CallInt(ctx context.Context, serviceName, functionName string, args ...interface{}) (int, error) {
+	if defaultClient == nil {
+		// Auto-initialize with current origin if not configured
+		fmt.Printf("🔗 Auto-initializing gRPC client with empty baseURL\n")
+		defaultClient = NewClient("")
+		fmt.Printf("🔗 Golem gRPC client auto-initialized (baseURL: '%s', timeout: %v)\n", defaultClient.baseURL, defaultClient.timeout)
+	}
+	return defaultClient.CallInt(ctx, serviceName, functionName, args...)
 }

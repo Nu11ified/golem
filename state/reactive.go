@@ -588,3 +588,105 @@ func CreateComponent(renderFn func() *dom.Element) *Component {
 func CreatePersistence() *Persistence {
 	return NewPersistence()
 }
+
+// ReactiveState represents a reactive state manager for complex state objects
+type ReactiveState struct {
+	value     interface{}
+	observers []func(interface{})
+	mutex     sync.RWMutex
+}
+
+// NewReactiveState creates a new reactive state manager
+func NewReactiveState(initialValue interface{}) *ReactiveState {
+	return &ReactiveState{
+		value:     initialValue,
+		observers: make([]func(interface{}), 0),
+	}
+}
+
+// Get returns the current state value
+func (rs *ReactiveState) Get() interface{} {
+	rs.mutex.RLock()
+	defer rs.mutex.RUnlock()
+	return rs.value
+}
+
+// Update modifies the state using an updater function and notifies observers
+func (rs *ReactiveState) Update(updater func(interface{}) interface{}) {
+	rs.mutex.Lock()
+	newValue := updater(rs.value)
+	rs.value = newValue
+	observers := make([]func(interface{}), len(rs.observers))
+	copy(observers, rs.observers)
+	rs.mutex.Unlock()
+
+	fmt.Printf("🔄 ReactiveState.Update: state changed, notifying %d observers\n", len(observers))
+
+	// Notify observers outside the lock
+	for i, observer := range observers {
+		fmt.Printf("  📢 Notifying observer %d\n", i)
+		observer(newValue)
+	}
+}
+
+// Subscribe adds an observer that gets called when state changes
+func (rs *ReactiveState) Subscribe(observer func(interface{})) func() {
+	rs.mutex.Lock()
+	rs.observers = append(rs.observers, observer)
+	index := len(rs.observers) - 1
+	rs.mutex.Unlock()
+
+	// Return unsubscribe function
+	return func() {
+		rs.mutex.Lock()
+		defer rs.mutex.Unlock()
+		if index < len(rs.observers) {
+			rs.observers = append(rs.observers[:index], rs.observers[index+1:]...)
+		}
+	}
+}
+
+// WithState creates a reactive DOM element that updates when state changes
+func (rs *ReactiveState) WithState(renderFn func(interface{}) *dom.Element) *dom.Element {
+	// Initial render
+	element := renderFn(rs.Get())
+	fmt.Printf("🎨 ReactiveState.WithState: Initial render complete\n")
+
+	// Subscribe to state changes and re-render
+	rs.Subscribe(func(newState interface{}) {
+		fmt.Printf("🎨 ReactiveState.WithState: State changed, triggering re-render\n")
+		newElement := renderFn(newState)
+
+		// Ensure both elements are rendered
+		if element.JSElement.IsUndefined() {
+			fmt.Printf("  🔧 Initial element not rendered, rendering now\n")
+			element.Render()
+		}
+
+		renderedNewElement := newElement.Render()
+		fmt.Printf("  🔧 New element rendered\n")
+
+		// Replace the old element with the new one in the DOM
+		if !element.JSElement.IsUndefined() {
+			parent := element.JSElement.Get("parentNode")
+			if !parent.IsUndefined() && !parent.IsNull() {
+				fmt.Printf("  🔄 Replacing DOM element\n")
+				parent.Call("replaceChild", renderedNewElement, element.JSElement)
+
+				// Update the element reference to point to the new DOM node
+				element.JSElement = renderedNewElement
+				element.Props = newElement.Props
+				element.Children = newElement.Children
+				element.Type = newElement.Type
+				element.EventHandlers = newElement.EventHandlers
+				fmt.Printf("  ✅ DOM element replaced successfully\n")
+			} else {
+				fmt.Printf("  ❌ Parent element not found in DOM\n")
+			}
+		} else {
+			fmt.Printf("  ❌ Original element JSElement is undefined\n")
+		}
+	})
+
+	return element
+}

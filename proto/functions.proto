@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package golem.functions;
+
+option go_package = "github.com/Nu11ified/golem/proto/gen";
+
+import "google/protobuf/any.proto";
+
+// Generic function service for calling server functions
+service FunctionService {
+  // Call any server function by name with arguments
+  rpc Call(FunctionRequest) returns (FunctionResponse);
+  
+  // Stream version for real-time updates
+  rpc CallStream(FunctionRequest) returns (stream FunctionResponse);
+  
+  // List available functions
+  rpc ListFunctions(ListFunctionsRequest) returns (ListFunctionsResponse);
+}
+
+// Request to call a function
+message FunctionRequest {
+  string function_name = 1;  // e.g., "Hello", "GetUserProfile"
+  string service_name = 2;   // e.g., "server", "auth", "db"
+  repeated google.protobuf.Any args = 3;  // Function arguments
+  map<string, string> metadata = 4;      // Additional metadata
+}
+
+// Response from function call
+message FunctionResponse {
+  bool success = 1;
+  google.protobuf.Any result = 2;  // Function result
+  string error = 3;               // Error message if any
+  map<string, string> metadata = 4; // Response metadata
+}
+
+// Request to list available functions
+message ListFunctionsRequest {
+  string service_name = 1;  // Filter by service, empty for all
+}
+
+// Response with available functions
+message ListFunctionsResponse {
+  repeated FunctionInfo functions = 1;
+}
+
+// Information about a function
+message FunctionInfo {
+  string name = 1;
+  string service_name = 2;
+  repeated string arg_types = 3;
+  string return_type = 4;
+  string description = 5;
+} 
