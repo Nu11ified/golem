@@ -1,10 +1,10 @@
 {
-  "projectName": "golem-framework",
+  "projectName": "notion-clone",
   "version": "0.1.0",
-  "entry": "src/app/main.golem",
+  "entry": "src/app/main.go",
   "output": ".golem/build",
   "dev": {
-    "port": 3000,
+    "port": 4000,
     "hotReload": true,
     "watch": ["src/**/*.golem", "src/**/*.go"]
   },

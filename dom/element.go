@@ -5,6 +5,7 @@ package dom
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"syscall/js"
 )
 
@@ -157,7 +158,7 @@ func (e *Element) Render() js.Value {
 		doc := js.Global().Get("document")
 		e.JSElement = doc.Call("createElement", e.Type)
 
-		// Set properties
+		// Set properties (textContent deferred until after innerHTML clear)
 		for name, value := range e.Props {
 			switch name {
 			case "class":
@@ -165,7 +166,7 @@ func (e *Element) Render() js.Value {
 			case "id":
 				e.JSElement.Set("id", value)
 			case "textContent":
-				e.JSElement.Set("textContent", value)
+				// Deferred — set after innerHTML clear below
 			case "value":
 				e.JSElement.Set("value", value)
 			case "checked", "autofocus":
@@ -183,6 +184,11 @@ func (e *Element) Render() js.Value {
 
 	// Clear existing children
 	e.JSElement.Set("innerHTML", "")
+
+	// Set textContent after clearing innerHTML so it isn't wiped
+	if tc, ok := e.Props["textContent"]; ok {
+		e.JSElement.Set("textContent", tc)
+	}
 
 	// Render children
 	for _, child := range e.Children {
@@ -336,6 +342,21 @@ func If(condition bool, attr Attribute) Attribute {
 		return attr
 	}
 	return Attribute{Name: "", Value: nil}
+}
+
+// Style creates a style attribute from a map of CSS properties.
+func Style(styles map[string]string) Attribute {
+	if len(styles) == 0 {
+		return Attribute{Name: "", Value: nil}
+	}
+	var sb strings.Builder
+	for k, v := range styles {
+		sb.WriteString(k)
+		sb.WriteString(": ")
+		sb.WriteString(v)
+		sb.WriteString("; ")
+	}
+	return Attribute{Name: "style", Value: strings.TrimRight(sb.String(), " ")}
 }
 
 // Common HTML elements

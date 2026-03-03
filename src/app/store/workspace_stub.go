@@ -27,6 +27,11 @@ func WorkspaceReducer(s interface{}, action state.Action) interface{} {
 	}
 
 	switch action.Type {
+	case "INIT_WORKSPACE":
+		if newWs, ok := action.Payload.(*models.Workspace); ok {
+			return newWs
+		}
+		return ws
 	case CreatePage:
 		return handleCreatePage(ws, action.Payload)
 	case DeletePage:
