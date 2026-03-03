@@ -286,6 +286,37 @@ func (r *Router) AddRouteWithLayout(route *Route, parent *Route) *Router {
 	return r.AddRoute(route)
 }
 
+// AddSimpleRouteWithLayout registers a route with a layout function.
+func (r *Router) AddSimpleRouteWithLayout(path string, component func(params map[string]string) *dom.Element, layout func(*dom.Element) *dom.Element) *Router {
+	return r.AddRoute(&Route{
+		Path:      path,
+		Component: component,
+		Layout:    layout,
+	})
+}
+
+// AddRouteWithErrorBoundary registers a route with an error handler.
+func (r *Router) AddRouteWithErrorBoundary(path string, component func(params map[string]string) *dom.Element, errorHandler func(error) *dom.Element) *Router {
+	return r.AddRoute(&Route{
+		Path:         path,
+		Component:    component,
+		ErrorHandler: errorHandler,
+	})
+}
+
+// AddRouteWithParallelSlots registers a route with parallel slot components.
+func (r *Router) AddRouteWithParallelSlots(path string, component func(params map[string]string) *dom.Element, slots map[string]func(params map[string]string) *dom.Element) *Router {
+	parallelSlots := make(map[string]*Route, len(slots))
+	for name, fn := range slots {
+		parallelSlots[name] = &Route{Component: fn}
+	}
+	return r.AddRoute(&Route{
+		Path:          path,
+		Component:     component,
+		ParallelSlots: parallelSlots,
+	})
+}
+
 // compileRoute compiles route path to regex
 func (r *Router) compileRoute(route *Route) {
 	if route.Path == "" {

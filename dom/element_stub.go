@@ -352,6 +352,7 @@ func Button(args ...interface{}) *Element { return NewElement("button", args...)
 func Input(args ...interface{}) *Element  { return NewElement("input", args...) }
 func Span(args ...interface{}) *Element   { return NewElement("span", args...) }
 func A(args ...interface{}) *Element      { return NewElement("a", args...) }
+func El(tag string, args ...interface{}) *Element { return NewElement(tag, args...) }
 func Img(args ...interface{}) *Element    { return NewElement("img", args...) }
 func Ul(args ...interface{}) *Element     { return NewElement("ul", args...) }
 func Li(args ...interface{}) *Element     { return NewElement("li", args...) }
