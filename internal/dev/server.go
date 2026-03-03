@@ -515,7 +515,7 @@ if (typeof module !== 'undefined' && module.exports) {
 	}
 
 	// Build the WebAssembly file
-	fmt.Println("🔨 Building WebAssembly with server functions...")
+	fmt.Println("Building WebAssembly...")
 
 	// Set environment variables for WebAssembly build
 	env := append(os.Environ(),
@@ -523,21 +523,9 @@ if (typeof module !== 'undefined' && module.exports) {
 		"GOARCH=wasm",
 	)
 
-	// Build command: go build -o app.wasm ./src/app/main.go
+	// Build command: compile src/app/ package directly
 	wasmOutput := filepath.Join(devDir, "app.wasm")
-
-	// Create a temporary main.go that imports server packages
-	tempMainFile := filepath.Join(devDir, "main.go")
-	if err := s.createWasmMainFile(tempMainFile); err != nil {
-		return fmt.Errorf("failed to create WASM main file: %v", err)
-	}
-
-	// Build the WASM file from the temporary main
-	buildArgs := []string{
-		"build",
-		"-o", wasmOutput,
-		tempMainFile,
-	}
+	buildArgs := []string{"build", "-o", wasmOutput, "./src/app/"}
 
 	// Execute go build
 	cmd := exec.Command("go", buildArgs...)
@@ -550,54 +538,8 @@ if (typeof module !== 'undefined' && module.exports) {
 		return fmt.Errorf("WebAssembly build failed: %v", err)
 	}
 
-	fmt.Println("✅ WebAssembly build completed with server functions")
+	fmt.Println("WebAssembly build completed")
 	return nil
-}
-
-// createWasmMainFile creates a main.go file that imports both app and server packages
-func (s *Server) createWasmMainFile(mainFile string) error {
-	// Read the original main.go to get its content
-	originalMain, err := os.ReadFile("src/app/main.go")
-	if err != nil {
-		return fmt.Errorf("failed to read original main.go: %v", err)
-	}
-
-	// Get module name for proper imports
-	moduleName, err := functions.GetModuleName()
-	if err != nil {
-		return fmt.Errorf("failed to get module name: %v", err)
-	}
-
-	// Create a new main.go that imports server packages
-	content := fmt.Sprintf(`//go:build js && wasm
-
-// Auto-generated main.go for WASM build with server functions
-package main
-
-import (
-	_ "%s/src/server" // Import server package to trigger function registration
-)
-
-// Include the original main.go content below
-`, moduleName)
-
-	// Append the original main.go content, but remove its package declaration
-	originalContent := string(originalMain)
-	lines := strings.Split(originalContent, "\n")
-	var filteredLines []string
-
-	for i, line := range lines {
-		// Skip the package main line from original file
-		if i == 0 && strings.HasPrefix(strings.TrimSpace(line), "package main") {
-			continue
-		}
-		filteredLines = append(filteredLines, line)
-	}
-
-	content += strings.Join(filteredLines, "\n")
-
-	// Write the combined main.go
-	return os.WriteFile(mainFile, []byte(content), 0644)
 }
 
 func (s *Server) watchFiles() {
