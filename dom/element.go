@@ -418,6 +418,105 @@ func Render(element *Element, selector string) {
 	target.Call("appendChild", renderedElement)
 }
 
+// Hydrate attaches event handlers from the virtual element tree to
+// existing server-rendered DOM nodes, making the page interactive
+// without re-rendering. It finds the root DOM node via
+// document.querySelector(selector), then walks the virtual tree and
+// the real DOM tree in parallel, attaching event listeners using
+// data-golem-id attributes for matching.
+func Hydrate(element *Element, selector string) {
+	doc := js.Global().Get("document")
+	target := doc.Call("querySelector", selector)
+
+	if target.IsNull() || target.IsUndefined() {
+		fmt.Printf("Hydrate: target element not found: %s\n", selector)
+		return
+	}
+
+	// The server-rendered content is inside the target container.
+	// The first element child of the target corresponds to the root
+	// of the virtual element tree.
+	children := target.Get("children")
+	if children.Length() == 0 {
+		fmt.Printf("Hydrate: no children found in target %s\n", selector)
+		return
+	}
+
+	rootDOMNode := children.Index(0)
+	var counter int
+	hydrateNode(element, rootDOMNode, &counter)
+}
+
+// hydrateNode recursively walks the virtual element tree and the real
+// DOM tree in parallel, attaching event handlers from the virtual
+// elements to the corresponding real DOM nodes. It uses data-golem-id
+// attributes for verification that the trees are aligned.
+func hydrateNode(element *Element, domNode js.Value, counter *int) {
+	if element == nil || domNode.IsNull() || domNode.IsUndefined() {
+		return
+	}
+
+	// Skip text nodes -- they have no event handlers or data-golem-id.
+	if element.Type == "text" {
+		return
+	}
+
+	// Assign the current ID and advance the counter (must match the
+	// depth-first order used by RenderToHTMLWithIDs on the server).
+	expectedID := *counter
+	*counter++
+
+	// Verify data-golem-id matches for debugging (optional but useful).
+	actualID := domNode.Call("getAttribute", "data-golem-id")
+	if !actualID.IsNull() && !actualID.IsUndefined() {
+		if actualID.String() != fmt.Sprintf("%d", expectedID) {
+			fmt.Printf("Hydrate warning: expected data-golem-id=%d, got %s\n",
+				expectedID, actualID.String())
+		}
+	}
+
+	// Link the virtual element to the real DOM node.
+	element.JSElement = domNode
+
+	// Attach event handlers to the real DOM node.
+	for event, handler := range element.EventHandlers {
+		domNode.Call("addEventListener", event, handler)
+	}
+
+	// Recurse into children. We walk the virtual children and match
+	// them against the real DOM child nodes. Text virtual children
+	// correspond to DOM text nodes (nodeType 3); element virtual
+	// children correspond to DOM element nodes (nodeType 1).
+	domChildNodes := domNode.Get("childNodes")
+	domChildCount := domChildNodes.Length()
+	domIdx := 0
+
+	for _, child := range element.Children {
+		if child.Type == "text" {
+			// Text nodes don't need hydration; just skip past the
+			// corresponding DOM text node.
+			for domIdx < domChildCount {
+				n := domChildNodes.Index(domIdx)
+				domIdx++
+				if n.Get("nodeType").Int() == 3 { // TEXT_NODE
+					break
+				}
+			}
+			continue
+		}
+
+		// Find the next element node in the DOM children.
+		for domIdx < domChildCount {
+			n := domChildNodes.Index(domIdx)
+			domIdx++
+			if n.Get("nodeType").Int() == 1 { // ELEMENT_NODE
+				hydrateNode(child, n, counter)
+				break
+			}
+		}
+	}
+}
+
 // Alert shows a browser alert
 func Alert(message string) {
 	js.Global().Call("alert", message)

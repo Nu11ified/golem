@@ -416,6 +416,54 @@ func (r *Router) RenderWithErrorBoundary(route *Route, params map[string]string)
 	return result
 }
 
+// RenderParallelSlots renders each parallel slot independently with its own
+// error boundary. The main route component (if any) is rendered as the
+// "children" slot. Each slot gets its own error handling so a failure in
+// one slot does not affect the others.
+func (r *Router) RenderParallelSlots(route *Route, params map[string]string) map[string]*dom.Element {
+	slots := make(map[string]*dom.Element)
+
+	// Render main content as "children" slot
+	if route.Component != nil {
+		slots["children"] = r.RenderWithErrorBoundary(route, params)
+	}
+
+	// Render each parallel slot
+	for name, slotRoute := range route.ParallelSlots {
+		if slotRoute == nil || slotRoute.Component == nil {
+			slots[name] = nil
+			continue
+		}
+		slots[name] = r.renderSlotWithErrorBoundary(slotRoute, params)
+	}
+
+	return slots
+}
+
+// renderSlotWithErrorBoundary renders a slot route's component with panic
+// recovery. Each slot uses its own ErrorHandler if available; otherwise
+// the panic propagates.
+func (r *Router) renderSlotWithErrorBoundary(slotRoute *Route, params map[string]string) *dom.Element {
+	if slotRoute.ErrorHandler == nil {
+		return slotRoute.Component(params)
+	}
+
+	var result *dom.Element
+	func() {
+		defer func() {
+			if err := recover(); err != nil {
+				if e, ok := err.(error); ok {
+					result = slotRoute.ErrorHandler(e)
+				} else {
+					result = slotRoute.ErrorHandler(fmt.Errorf("%v", err))
+				}
+			}
+		}()
+		result = slotRoute.Component(params)
+	}()
+	return result
+}
+
 // AddRouteWithLayout adds a route and sets its parent for layout chaining.
 func (r *Router) AddRouteWithLayout(route *Route, parent *Route) *Router {
 	route.ParentRoute = parent

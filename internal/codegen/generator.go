@@ -14,6 +14,14 @@ type routeImport struct {
 	ImportPath string // full import path (e.g., "myapp/app/about")
 }
 
+// parallelSlotEntry carries code-generation info for a single parallel slot.
+type parallelSlotEntry struct {
+	PageAlias  string // import alias for the slot's page package
+	ErrorAlias string // import alias for the slot's error package (same package)
+	HasError   bool   // whether the slot has an error.go file
+	HasLoading bool   // whether the slot has a loading.go file
+}
+
 // routeEntry represents a single route registration to generate.
 type routeEntry struct {
 	Path             string
@@ -24,7 +32,7 @@ type routeEntry struct {
 	HasError         bool
 	IsIntercepting   bool
 	InterceptTarget  string
-	ParallelSlots    map[string]string // slot name -> import alias
+	ParallelSlots    map[string]*parallelSlotEntry // slot name -> slot entry
 	ParentLayoutVar  string           // variable name for parent layout route (for chaining)
 }
 
@@ -116,12 +124,22 @@ func GenerateRoutes(tree *ScannedRoute, moduleName string) (string, error) {
 			}
 			sort.Strings(slotNames)
 			for _, name := range slotNames {
-				alias := entry.ParallelSlots[name]
+				slot := entry.ParallelSlots[name]
 				b.WriteString(fmt.Sprintf("\t\t\t%q: {\n", name))
 				b.WriteString(fmt.Sprintf("\t\t\t\tPath: %q,\n", entry.Path))
 				b.WriteString(fmt.Sprintf("\t\t\t\tComponent: func(params map[string]string) *dom.Element {\n"))
-				b.WriteString(fmt.Sprintf("\t\t\t\t\treturn %s.Page(params)\n", alias))
+				b.WriteString(fmt.Sprintf("\t\t\t\t\treturn %s.Page(params)\n", slot.PageAlias))
 				b.WriteString("\t\t\t\t},\n")
+				if slot.HasError {
+					b.WriteString(fmt.Sprintf("\t\t\t\tErrorHandler: func(err error) *dom.Element {\n"))
+					b.WriteString(fmt.Sprintf("\t\t\t\t\treturn %s.Error(err)\n", slot.ErrorAlias))
+					b.WriteString("\t\t\t\t},\n")
+				}
+				if slot.HasLoading {
+					b.WriteString(fmt.Sprintf("\t\t\t\tLoadingHandler: func() *dom.Element {\n"))
+					b.WriteString(fmt.Sprintf("\t\t\t\t\treturn %s.Loading()\n", slot.PageAlias))
+					b.WriteString("\t\t\t\t},\n")
+				}
 				b.WriteString("\t\t\t},\n")
 			}
 			b.WriteString("\t\t},\n")
@@ -220,7 +238,7 @@ func collectRoutes(route *ScannedRoute, moduleName string, imports map[string]ro
 
 		// Parallel slots
 		if len(route.ParallelSlots) > 0 {
-			entry.ParallelSlots = make(map[string]string)
+			entry.ParallelSlots = make(map[string]*parallelSlotEntry)
 			for slotName, slotRoute := range route.ParallelSlots {
 				if slotRoute.PageFile != "" {
 					slotImportPath := dirToImportPath(slotRoute.DirPath, moduleName)
@@ -231,7 +249,15 @@ func collectRoutes(route *ScannedRoute, moduleName string, imports map[string]ro
 						slotAlias = ensureUniqueAlias(dirToAlias(slotRoute.DirPath), slotImportPath, imports)
 						imports[slotImportPath] = routeImport{Alias: slotAlias, ImportPath: slotImportPath}
 					}
-					entry.ParallelSlots[slotName] = slotAlias
+					se := &parallelSlotEntry{
+						PageAlias:  slotAlias,
+						HasError:   slotRoute.ErrorFile != "",
+						HasLoading: slotRoute.LoadingFile != "",
+					}
+					if se.HasError {
+						se.ErrorAlias = slotAlias // same package as page
+					}
+					entry.ParallelSlots[slotName] = se
 				}
 			}
 		}
@@ -241,11 +267,10 @@ func collectRoutes(route *ScannedRoute, moduleName string, imports map[string]ro
 		// Handle parallel slots even without a page file (e.g., layout-only routes)
 		entry := routeEntry{
 			Path:          route.Path,
-			ParallelSlots: make(map[string]string),
+			ParallelSlots: make(map[string]*parallelSlotEntry),
 		}
 
-		// We need a dummy page alias -- but since there's no page, we skip the component.
-		// Actually, let's only emit parallel slot routes if they have pages.
+		// Only emit parallel slot routes if they have pages.
 		hasSlotPages := false
 		for slotName, slotRoute := range route.ParallelSlots {
 			if slotRoute.PageFile != "" {
@@ -257,7 +282,15 @@ func collectRoutes(route *ScannedRoute, moduleName string, imports map[string]ro
 					slotAlias = ensureUniqueAlias(dirToAlias(slotRoute.DirPath), slotImportPath, imports)
 					imports[slotImportPath] = routeImport{Alias: slotAlias, ImportPath: slotImportPath}
 				}
-				entry.ParallelSlots[slotName] = slotAlias
+				se := &parallelSlotEntry{
+					PageAlias:  slotAlias,
+					HasError:   slotRoute.ErrorFile != "",
+					HasLoading: slotRoute.LoadingFile != "",
+				}
+				if se.HasError {
+					se.ErrorAlias = slotAlias
+				}
+				entry.ParallelSlots[slotName] = se
 				hasSlotPages = true
 			}
 		}
