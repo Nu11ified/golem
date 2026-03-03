@@ -2,7 +2,11 @@
 
 package dom
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+	"strings"
+)
 
 // Stub Element type for non-WASM builds
 type Element struct {
@@ -116,6 +120,106 @@ func Li(args ...interface{}) *Element     { return NewElement("li", args...) }
 // Render renders an element tree to a target selector (stub)
 func Render(element *Element, selector string) {
 	fmt.Printf("Rendering %s to %s (stub)\n", element.Type, selector)
+}
+
+// Hydrate attaches event handlers from the virtual element tree to
+// existing server-rendered DOM nodes, making the page interactive
+// without re-rendering. (stub for non-WASM builds)
+func Hydrate(element *Element, selector string) {
+	fmt.Printf("Hydrate: %s to %s (stub)\n", element.Type, selector)
+}
+
+// RenderToHTMLWithIDs renders an element tree to an HTML string with
+// data-golem-id attributes for hydration matching. IDs are assigned in
+// depth-first order so that the hydration walk can match virtual nodes
+// to real DOM nodes deterministically.
+func RenderToHTMLWithIDs(element *Element) string {
+	var counter int
+	return renderNodeWithIDs(element, &counter)
+}
+
+// voidElements is the set of HTML elements that must not have a closing tag.
+var voidElements = map[string]bool{
+	"area": true, "base": true, "br": true, "col": true,
+	"embed": true, "hr": true, "img": true, "input": true,
+	"link": true, "meta": true, "source": true, "track": true,
+	"wbr": true,
+}
+
+func renderNodeWithIDs(element *Element, counter *int) string {
+	if element == nil {
+		return ""
+	}
+
+	// Text nodes render as plain text (no wrapper element, no ID).
+	if element.Type == "text" {
+		if tc, ok := element.Props["textContent"]; ok {
+			return fmt.Sprintf("%v", tc)
+		}
+		return ""
+	}
+
+	id := *counter
+	*counter++
+
+	var sb strings.Builder
+	sb.WriteString("<")
+	sb.WriteString(element.Type)
+
+	// data-golem-id attribute first for consistency
+	sb.WriteString(fmt.Sprintf(` data-golem-id="%d"`, id))
+
+	// Render props as attributes (sorted for determinism).
+	// Event handlers are intentionally omitted -- they are attached
+	// during hydration, not serialized into the HTML.
+	keys := make([]string, 0, len(element.Props))
+	for k := range element.Props {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, name := range keys {
+		value := element.Props[name]
+		switch name {
+		case "textContent":
+			// textContent is rendered as inner text, not an attribute
+			continue
+		case "checked":
+			if b, ok := value.(bool); ok && b {
+				sb.WriteString(" checked")
+			}
+		case "disabled":
+			if b, ok := value.(bool); ok && b {
+				sb.WriteString(" disabled")
+			}
+		case "autofocus":
+			if b, ok := value.(bool); ok && b {
+				sb.WriteString(" autofocus")
+			}
+		default:
+			sb.WriteString(fmt.Sprintf(` %s="%v"`, name, value))
+		}
+	}
+
+	sb.WriteString(">")
+
+	// Void elements have no closing tag and no children.
+	if voidElements[element.Type] {
+		return sb.String()
+	}
+
+	// If there is a textContent prop and no children, render it as inner text.
+	if tc, ok := element.Props["textContent"]; ok && len(element.Children) == 0 {
+		sb.WriteString(fmt.Sprintf("%v", tc))
+	}
+
+	// Render children recursively.
+	for _, child := range element.Children {
+		sb.WriteString(renderNodeWithIDs(child, counter))
+	}
+
+	sb.WriteString(fmt.Sprintf("</%s>", element.Type))
+	return sb.String()
 }
 
 // Alert shows a browser alert (stub)
