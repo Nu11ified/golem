@@ -2,7 +2,12 @@
 
 package dom
 
-import "fmt"
+import (
+	"fmt"
+	"html"
+	"sort"
+	"strings"
+)
 
 // Stub Element type for non-WASM builds
 type Element struct {
@@ -19,6 +24,34 @@ type Attribute struct {
 	Value interface{}
 }
 
+// EventAttribute represents an event handler attribute (server-side stub)
+type EventAttribute struct {
+	Name    string
+	Handler interface{}
+}
+
+// selfClosingTags are HTML elements that should not have a closing tag.
+var selfClosingTags = map[string]bool{
+	"input": true,
+	"img":   true,
+	"br":    true,
+	"hr":    true,
+	"meta":  true,
+	"link":  true,
+}
+
+// booleanAttrs are HTML attributes that should be rendered as bare attributes when true.
+var booleanAttrs = map[string]bool{
+	"checked":  true,
+	"disabled": true,
+	"autofocus": true,
+	"readonly":  true,
+	"required":  true,
+	"selected":  true,
+	"multiple":  true,
+	"hidden":    true,
+}
+
 // NewElement creates a new virtual DOM element with mixed arguments
 func NewElement(tagType string, args ...interface{}) *Element {
 	props := make(map[string]interface{})
@@ -28,13 +61,15 @@ func NewElement(tagType string, args ...interface{}) *Element {
 	for _, arg := range args {
 		switch v := arg.(type) {
 		case Attribute:
-			if v.Name == "onclick" {
-				if handler, ok := v.Value.(func()); ok {
-					eventHandlers["click"] = handler
-				}
-			} else if v.Name != "" { // Skip empty attributes from If() function
+			if v.Name != "" { // Skip empty attributes from If() function
 				props[v.Name] = v.Value
 			}
+		case EventAttribute:
+			// Store event handlers but they won't be rendered to HTML
+			if handler, ok := v.Handler.(func()); ok {
+				eventHandlers[v.Name] = handler
+			}
+			// For non-func() handlers, we just skip them on server side
 		case *Element:
 			children = append(children, v)
 		case string:
@@ -72,6 +107,118 @@ func (e *Element) Update(newProps map[string]interface{}) {
 	// Stub implementation for non-WASM builds
 }
 
+// RenderToHTML renders an Element tree to an HTML string suitable for
+// server-side rendering. Event handlers are omitted. Text content and
+// attribute values are HTML-escaped to prevent XSS.
+func RenderToHTML(el *Element) string {
+	if el == nil {
+		return ""
+	}
+	var buf strings.Builder
+	renderElementToHTML(&buf, el)
+	return buf.String()
+}
+
+// renderElementToHTML recursively renders an element to the builder.
+func renderElementToHTML(buf *strings.Builder, el *Element) {
+	if el == nil {
+		return
+	}
+
+	// Handle text nodes
+	if el.Type == "text" {
+		if tc, ok := el.Props["textContent"]; ok {
+			buf.WriteString(html.EscapeString(fmt.Sprintf("%v", tc)))
+		}
+		return
+	}
+
+	// Opening tag
+	buf.WriteByte('<')
+	buf.WriteString(el.Type)
+
+	// Render attributes from Props in a deterministic order
+	renderAttributes(buf, el.Props)
+
+	isSelfClosing := selfClosingTags[el.Type]
+
+	if isSelfClosing {
+		buf.WriteString(" />")
+		return
+	}
+
+	buf.WriteByte('>')
+
+	// Render textContent prop as inner text (not as an attribute)
+	if tc, ok := el.Props["textContent"]; ok {
+		buf.WriteString(html.EscapeString(fmt.Sprintf("%v", tc)))
+	}
+
+	// Render children
+	for _, child := range el.Children {
+		renderElementToHTML(buf, child)
+	}
+
+	// Closing tag
+	buf.WriteString("</")
+	buf.WriteString(el.Type)
+	buf.WriteByte('>')
+}
+
+// renderAttributes writes HTML attributes from the props map to the builder.
+// It sorts attribute names for deterministic output. It skips textContent
+// (rendered as inner text), event handlers, and false boolean attributes.
+func renderAttributes(buf *strings.Builder, props map[string]interface{}) {
+	if len(props) == 0 {
+		return
+	}
+
+	// Sort keys for deterministic output
+	keys := make([]string, 0, len(props))
+	for k := range props {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, name := range keys {
+		value := props[name]
+
+		// Skip textContent — it is rendered as inner text, not an attribute
+		if name == "textContent" {
+			continue
+		}
+
+		// Skip event handler props
+		if isEventHandlerProp(name) {
+			continue
+		}
+
+		// Handle boolean attributes
+		if booleanAttrs[name] {
+			if bVal, ok := value.(bool); ok {
+				if bVal {
+					buf.WriteByte(' ')
+					buf.WriteString(name)
+				}
+				// false boolean attributes are omitted entirely
+				continue
+			}
+		}
+
+		// Regular attribute
+		buf.WriteByte(' ')
+		buf.WriteString(name)
+		buf.WriteString(`="`)
+		buf.WriteString(html.EscapeString(fmt.Sprintf("%v", value)))
+		buf.WriteByte('"')
+	}
+}
+
+// isEventHandlerProp returns true for props that represent event handlers.
+func isEventHandlerProp(name string) bool {
+	return strings.HasPrefix(name, "on")
+}
+
 // Helpers for creating common attributes
 func Class(className string) Attribute {
 	return Attribute{Name: "class", Value: className}
@@ -85,12 +232,53 @@ func Text(text interface{}) Attribute {
 	return Attribute{Name: "textContent", Value: fmt.Sprintf("%v", text)}
 }
 
-func OnClick(handler func()) Attribute {
-	return Attribute{Name: "onclick", Value: handler}
+func Placeholder(text string) Attribute {
+	return Attribute{Name: "placeholder", Value: text}
+}
+
+func Value(value string) Attribute {
+	return Attribute{Name: "value", Value: value}
+}
+
+func Type(typeStr string) Attribute {
+	return Attribute{Name: "type", Value: typeStr}
+}
+
+func Checked(checked bool) Attribute {
+	return Attribute{Name: "checked", Value: checked}
+}
+
+func Autofocus(focus bool) Attribute {
+	return Attribute{Name: "autofocus", Value: focus}
 }
 
 func Disabled(disabled bool) Attribute {
 	return Attribute{Name: "disabled", Value: disabled}
+}
+
+// On creates an EventAttribute for a given event name and handler.
+func On(event string, handler interface{}) EventAttribute {
+	return EventAttribute{Name: event, Handler: handler}
+}
+
+// OnClick creates a click event handler (no-op on server, omitted from HTML).
+func OnClick(handler func()) EventAttribute {
+	return On("click", handler)
+}
+
+// OnInput creates an input event handler (no-op on server, omitted from HTML).
+func OnInput(handler func(value string)) EventAttribute {
+	return On("input", handler)
+}
+
+// OnChange creates a change event handler (no-op on server, omitted from HTML).
+func OnChange(handler func(checked bool)) EventAttribute {
+	return On("change", handler)
+}
+
+// OnKeyDown creates a keydown event handler (no-op on server, omitted from HTML).
+func OnKeyDown(handler func(key string)) EventAttribute {
+	return On("keydown", handler)
 }
 
 func If(condition bool, attr Attribute) Attribute {
@@ -104,6 +292,8 @@ func If(condition bool, attr Attribute) Attribute {
 func Div(args ...interface{}) *Element    { return NewElement("div", args...) }
 func H1(args ...interface{}) *Element     { return NewElement("h1", args...) }
 func H2(args ...interface{}) *Element     { return NewElement("h2", args...) }
+func H3(args ...interface{}) *Element     { return NewElement("h3", args...) }
+func H4(args ...interface{}) *Element     { return NewElement("h4", args...) }
 func P(args ...interface{}) *Element      { return NewElement("p", args...) }
 func Button(args ...interface{}) *Element { return NewElement("button", args...) }
 func Input(args ...interface{}) *Element  { return NewElement("input", args...) }
@@ -112,6 +302,13 @@ func A(args ...interface{}) *Element      { return NewElement("a", args...) }
 func Img(args ...interface{}) *Element    { return NewElement("img", args...) }
 func Ul(args ...interface{}) *Element     { return NewElement("ul", args...) }
 func Li(args ...interface{}) *Element     { return NewElement("li", args...) }
+func Label(args ...interface{}) *Element  { return NewElement("label", args...) }
+
+// Checkbox creates an input element with type="checkbox".
+func Checkbox(args ...interface{}) *Element {
+	newArgs := append([]interface{}{Type("checkbox")}, args...)
+	return NewElement("input", newArgs...)
+}
 
 // Render renders an element tree to a target selector (stub)
 func Render(element *Element, selector string) {
