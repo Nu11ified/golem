@@ -11,15 +11,23 @@ import (
 
 // Stub implementations for non-WASM builds
 type Route struct {
-	Path       string
-	Component  func(params map[string]string) *dom.Element
-	Guards     []Guard
-	Children   []*Route
-	Meta       map[string]interface{}
-	Name       string
-	Redirect   string
-	Regex      *regexp.Regexp
-	ParamNames []string
+	Path            string
+	Component       func(params map[string]string) *dom.Element
+	Guards          []Guard
+	Children        []*Route
+	Meta            map[string]interface{}
+	Name            string
+	Redirect        string
+	Regex           *regexp.Regexp
+	ParamNames      []string
+	Layout          func(children *dom.Element) *dom.Element
+	ErrorHandler    func(err error) *dom.Element
+	LoadingHandler  func() *dom.Element
+	Template        func(children *dom.Element) *dom.Element
+	ParentRoute     *Route
+	ParallelSlots   map[string]*Route
+	IsIntercepting  bool
+	InterceptTarget string
 }
 
 type Guard func(to *Route, from *Route, params map[string]string) bool
@@ -74,7 +82,10 @@ func NewRouter() *Router {
 func (r *Router) SetMode(mode RouterMode) *Router      { return r }
 func (r *Router) SetContainer(selector string) *Router { return r }
 func (r *Router) SetBaseURL(baseURL string) *Router    { return r }
-func (r *Router) AddRoute(route *Route) *Router        { return r }
+func (r *Router) AddRoute(route *Route) *Router {
+	r.routes = append(r.routes, route)
+	return r
+}
 func (r *Router) AddSimpleRoute(path string, component func(params map[string]string) *dom.Element) *Router {
 	return r
 }
@@ -86,6 +97,64 @@ func (r *Router) BeforeEach(guard Guard) *Router                                
 func (r *Router) AfterEach(hook func(*Route, *Route)) *Router                       { return r }
 func (r *Router) NotFound(handler func() *dom.Element) *Router                      { return r }
 func (r *Router) OnError(handler func(error) *dom.Element) *Router                  { return r }
+
+// BuildLayoutChain walks the parent chain of a route and wraps the content
+// in each Layout. The innermost layout wraps first, then the parent, etc.
+// Result: rootLayout(parentLayout(childLayout(content)))
+func (r *Router) BuildLayoutChain(route *Route, content *dom.Element) *dom.Element {
+	if route == nil || content == nil {
+		return content
+	}
+
+	result := content
+
+	// Apply this route's layout first (innermost)
+	if route.Layout != nil {
+		result = route.Layout(result)
+	}
+
+	// Walk up the parent chain
+	parent := route.ParentRoute
+	for parent != nil {
+		if parent.Layout != nil {
+			result = parent.Layout(result)
+		}
+		parent = parent.ParentRoute
+	}
+
+	return result
+}
+
+// RenderWithErrorBoundary renders a route's component with panic recovery.
+// If the component panics and the route has an ErrorHandler, the error
+// handler is called with the recovered error to produce a fallback element.
+// If there is no ErrorHandler, the panic propagates normally.
+func (r *Router) RenderWithErrorBoundary(route *Route, params map[string]string) *dom.Element {
+	if route.ErrorHandler == nil {
+		return route.Component(params)
+	}
+
+	var result *dom.Element
+	func() {
+		defer func() {
+			if err := recover(); err != nil {
+				if e, ok := err.(error); ok {
+					result = route.ErrorHandler(e)
+				} else {
+					result = route.ErrorHandler(fmt.Errorf("%v", err))
+				}
+			}
+		}()
+		result = route.Component(params)
+	}()
+	return result
+}
+
+// AddRouteWithLayout adds a route and sets its parent for layout chaining.
+func (r *Router) AddRouteWithLayout(route *Route, parent *Route) *Router {
+	route.ParentRoute = parent
+	return r.AddRoute(route)
+}
 
 func (r *Router) Start() {
 	fmt.Println("Router only available in WebAssembly build")

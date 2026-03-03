@@ -13,15 +13,23 @@ import (
 
 // Route represents a single route
 type Route struct {
-	Path       string
-	Component  func(params map[string]string) *dom.Element
-	Guards     []Guard
-	Children   []*Route
-	Meta       map[string]interface{}
-	Name       string
-	Redirect   string
-	Regex      *regexp.Regexp
-	ParamNames []string
+	Path            string
+	Component       func(params map[string]string) *dom.Element
+	Guards          []Guard
+	Children        []*Route
+	Meta            map[string]interface{}
+	Name            string
+	Redirect        string
+	Regex           *regexp.Regexp
+	ParamNames      []string
+	Layout          func(children *dom.Element) *dom.Element
+	ErrorHandler    func(err error) *dom.Element
+	LoadingHandler  func() *dom.Element
+	Template        func(children *dom.Element) *dom.Element
+	ParentRoute     *Route
+	ParallelSlots   map[string]*Route
+	IsIntercepting  bool
+	InterceptTarget string
 }
 
 // Guard represents a route guard
@@ -251,9 +259,21 @@ func (r *Router) Navigate(path string) error {
 	r.currentRoute = route
 	r.currentParams = params
 
-	// Render component
+	// Render component with error boundary and layout support
 	if route.Component != nil {
-		component := route.Component(params)
+		var component *dom.Element
+
+		// Render with error boundary if available
+		component = r.RenderWithErrorBoundary(route, params)
+
+		// Apply template if available
+		if route.Template != nil && component != nil {
+			component = route.Template(component)
+		}
+
+		// Apply layout chain (this route's layout + all parent layouts)
+		component = r.BuildLayoutChain(route, component)
+
 		r.renderComponent(component)
 	}
 
@@ -344,6 +364,64 @@ func (r *Router) renderComponent(component *dom.Element) {
 	outlet.Call("appendChild", renderedElement)
 }
 
+// BuildLayoutChain walks the parent chain of a route and wraps the content
+// in each Layout. The innermost layout wraps first, then the parent, etc.
+// Result: rootLayout(parentLayout(childLayout(content)))
+func (r *Router) BuildLayoutChain(route *Route, content *dom.Element) *dom.Element {
+	if route == nil || content == nil {
+		return content
+	}
+
+	result := content
+
+	// Apply this route's layout first (innermost)
+	if route.Layout != nil {
+		result = route.Layout(result)
+	}
+
+	// Walk up the parent chain
+	parent := route.ParentRoute
+	for parent != nil {
+		if parent.Layout != nil {
+			result = parent.Layout(result)
+		}
+		parent = parent.ParentRoute
+	}
+
+	return result
+}
+
+// RenderWithErrorBoundary renders a route's component with panic recovery.
+// If the component panics and the route has an ErrorHandler, the error
+// handler is called with the recovered error to produce a fallback element.
+// If there is no ErrorHandler, the panic propagates normally.
+func (r *Router) RenderWithErrorBoundary(route *Route, params map[string]string) *dom.Element {
+	if route.ErrorHandler == nil {
+		return route.Component(params)
+	}
+
+	var result *dom.Element
+	func() {
+		defer func() {
+			if err := recover(); err != nil {
+				if e, ok := err.(error); ok {
+					result = route.ErrorHandler(e)
+				} else {
+					result = route.ErrorHandler(fmt.Errorf("%v", err))
+				}
+			}
+		}()
+		result = route.Component(params)
+	}()
+	return result
+}
+
+// AddRouteWithLayout adds a route and sets its parent for layout chaining.
+func (r *Router) AddRouteWithLayout(route *Route, parent *Route) *Router {
+	route.ParentRoute = parent
+	return r.AddRoute(route)
+}
+
 // Push navigates to a new route
 func (r *Router) Push(path string) error {
 	return r.Navigate(path)
@@ -375,9 +453,21 @@ func (r *Router) Replace(path string) error {
 	r.currentRoute = route
 	r.currentParams = params
 
-	// Render component
+	// Render component with error boundary and layout support
 	if route.Component != nil {
-		component := route.Component(params)
+		var component *dom.Element
+
+		// Render with error boundary if available
+		component = r.RenderWithErrorBoundary(route, params)
+
+		// Apply template if available
+		if route.Template != nil && component != nil {
+			component = route.Template(component)
+		}
+
+		// Apply layout chain (this route's layout + all parent layouts)
+		component = r.BuildLayoutChain(route, component)
+
 		r.renderComponent(component)
 	}
 
