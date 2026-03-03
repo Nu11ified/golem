@@ -133,6 +133,15 @@ func (s *Server) Start() error {
 		})
 	})
 
+	// Serve the HMR bridge JavaScript
+	if s.config.Dev.HotReload {
+		mux.HandleFunc("/golem-hmr.js", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/javascript")
+			w.Header().Set("Cache-Control", "no-cache")
+			w.Write([]byte(HMRBridgeJS))
+		})
+	}
+
 	// WebSocket endpoint for hot reload
 	if s.config.Dev.HotReload {
 		mux.HandleFunc("/ws", s.handleWebSocket)
@@ -324,15 +333,7 @@ func (s *Server) GenerateDevHTML() string {
 	hotReloadScript := ""
 	if s.config.Dev.HotReload {
 		hotReloadScript = `
-    <script>
-        // Hot reload WebSocket connection
-        const ws = new WebSocket('ws://localhost:` + fmt.Sprintf("%d", s.config.Dev.Port) + `/ws');
-        ws.onmessage = function(event) {
-            if (event.data === 'reload') {
-                window.location.reload();
-            }
-        };
-    </script>`
+    <script src="/golem-hmr.js"></script>`
 	}
 
 	cacheBuster := fmt.Sprintf("%d", time.Now().UnixNano())

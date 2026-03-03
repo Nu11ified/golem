@@ -59,6 +59,27 @@ func (b *Broadcaster) SendReload() {
 	}
 }
 
+// SendModuleUpdate sends a JSON-encoded module_update message to all connected
+// clients. The message format is: {"type":"module_update","module":"<name>","url":"<url>"}.
+func (b *Broadcaster) SendModuleUpdate(moduleName, url string) {
+	payload, _ := json.Marshal(map[string]string{
+		"type":   "module_update",
+		"module": moduleName,
+		"url":    url,
+	})
+	message := string(payload)
+
+	b.mutex.RLock()
+	defer b.mutex.RUnlock()
+	for _, ch := range b.clients {
+		select {
+		case ch <- message:
+		default:
+			// Skip slow clients to avoid blocking.
+		}
+	}
+}
+
 // SendError sends a JSON-encoded error message to all connected clients.
 // The message format is: {"type":"error","message":"<msg>"}.
 func (b *Broadcaster) SendError(msg string) {
