@@ -601,12 +601,19 @@ import (
 }
 
 func (s *Server) watchFiles() {
-	// File watcher implementation for hot reload
-	// This would watch the files specified in config.Dev.Watch
-	log.Println("🔍 File watcher started")
+	log.Println("File watcher started")
 
-	// Placeholder - would implement actual file watching
-	// using fsnotify or similar
+	watcher := NewFileWatcher("src", 500*time.Millisecond)
+	watcher.OnChange(func(path string) {
+		log.Printf("File changed: %s — rebuilding...", path)
+		start := time.Now()
+		if err := s.buildDevWasm(); err != nil {
+			log.Printf("Build failed: %v", err)
+			return
+		}
+		log.Printf("Rebuild completed in %v", time.Since(start))
+	})
+	watcher.Start()
 }
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
