@@ -319,3 +319,265 @@ func Render(element *Element, selector string) {
 func Alert(message string) {
 	fmt.Printf("Alert: %s (stub)\n", message)
 }
+
+// Style creates an inline style attribute from a map of CSS property→value pairs.
+// The resulting attribute renders as style="key: value; key: value;" in HTML.
+// An empty map produces a no-op attribute that is omitted from output.
+func Style(styles map[string]string) Attribute {
+	if len(styles) == 0 {
+		return Attribute{Name: "", Value: nil}
+	}
+	// Sort keys for deterministic output
+	keys := make([]string, 0, len(styles))
+	for k := range styles {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var buf strings.Builder
+	for _, k := range keys {
+		buf.WriteString(k)
+		buf.WriteString(": ")
+		buf.WriteString(styles[k])
+		buf.WriteString("; ")
+	}
+	result := strings.TrimRight(buf.String(), " ")
+	return Attribute{Name: "style", Value: result}
+}
+
+// DocumentOptions configures RenderDocument output.
+type DocumentOptions struct {
+	Title        string
+	Lang         string            // default "en"
+	Meta         map[string]string // name→content meta tags
+	Scripts      []string          // script URLs to include
+	Styles       []string          // stylesheet URLs to include
+	WasmPath     string            // path to WASM binary
+	WasmExecPath string            // path to wasm_exec.js
+}
+
+// RenderDocument wraps an element tree in a full HTML document with
+// DOCTYPE, html, head, and body tags.
+func RenderDocument(body *Element, options DocumentOptions) string {
+	lang := options.Lang
+	if lang == "" {
+		lang = "en"
+	}
+
+	var buf strings.Builder
+	buf.WriteString("<!DOCTYPE html>\n")
+	buf.WriteString(fmt.Sprintf("<html lang=\"%s\">\n", html.EscapeString(lang)))
+	buf.WriteString("<head>\n")
+	buf.WriteString("<meta charset=\"utf-8\" />\n")
+
+	if options.Title != "" {
+		buf.WriteString(fmt.Sprintf("<title>%s</title>\n", html.EscapeString(options.Title)))
+	}
+
+	// Meta tags — sorted for deterministic output
+	if len(options.Meta) > 0 {
+		metaKeys := make([]string, 0, len(options.Meta))
+		for k := range options.Meta {
+			metaKeys = append(metaKeys, k)
+		}
+		sort.Strings(metaKeys)
+		for _, name := range metaKeys {
+			content := options.Meta[name]
+			buf.WriteString(fmt.Sprintf("<meta name=\"%s\" content=\"%s\" />\n",
+				html.EscapeString(name), html.EscapeString(content)))
+		}
+	}
+
+	// Stylesheets
+	for _, href := range options.Styles {
+		buf.WriteString(fmt.Sprintf("<link rel=\"stylesheet\" href=\"%s\" />\n", html.EscapeString(href)))
+	}
+
+	// WASM exec script (must come before bootstrap)
+	if options.WasmExecPath != "" {
+		buf.WriteString(fmt.Sprintf("<script src=\"%s\"></script>\n", html.EscapeString(options.WasmExecPath)))
+	}
+
+	// User-specified scripts
+	for _, src := range options.Scripts {
+		buf.WriteString(fmt.Sprintf("<script src=\"%s\"></script>\n", html.EscapeString(src)))
+	}
+
+	buf.WriteString("</head>\n")
+	buf.WriteString("<body>\n")
+
+	// Render the body content
+	buf.WriteString(RenderToHTML(body))
+	buf.WriteByte('\n')
+
+	// WASM bootstrap script (at end of body for DOM readiness)
+	if options.WasmPath != "" {
+		buf.WriteString("<script>\n")
+		buf.WriteString("const go = new Go();\n")
+		buf.WriteString(fmt.Sprintf("WebAssembly.instantiateStreaming(fetch(\"%s\"), go.importObject).then((result) => {\n",
+			html.EscapeString(options.WasmPath)))
+		buf.WriteString("  go.run(result.instance);\n")
+		buf.WriteString("});\n")
+		buf.WriteString("</script>\n")
+	}
+
+	buf.WriteString("</body>\n")
+	buf.WriteString("</html>")
+
+	return buf.String()
+}
+
+// RenderToHTMLWithIDs renders an Element tree to an HTML string with
+// auto-incrementing data-golem-id attributes on each element node.
+// These IDs allow client-side hydration to match server-rendered DOM
+// nodes to the virtual DOM tree. Text nodes do not receive IDs.
+func RenderToHTMLWithIDs(el *Element) string {
+	if el == nil {
+		return ""
+	}
+	var buf strings.Builder
+	counter := 0
+	renderElementWithIDs(&buf, el, &counter)
+	return buf.String()
+}
+
+// renderElementWithIDs recursively renders an element with hydration IDs.
+func renderElementWithIDs(buf *strings.Builder, el *Element, counter *int) {
+	if el == nil {
+		return
+	}
+
+	// Handle text nodes (no ID)
+	if el.Type == "text" {
+		if tc, ok := el.Props["textContent"]; ok {
+			buf.WriteString(html.EscapeString(fmt.Sprintf("%v", tc)))
+		}
+		return
+	}
+
+	// Opening tag
+	buf.WriteByte('<')
+	buf.WriteString(el.Type)
+
+	// Add data-golem-id
+	id := *counter
+	*counter++
+	buf.WriteString(fmt.Sprintf(` data-golem-id="%d"`, id))
+
+	// Render attributes from Props
+	renderAttributes(buf, el.Props)
+
+	isSelfClosing := selfClosingTags[el.Type]
+
+	if isSelfClosing {
+		buf.WriteString(" />")
+		return
+	}
+
+	buf.WriteByte('>')
+
+	// Render textContent prop as inner text
+	if tc, ok := el.Props["textContent"]; ok {
+		buf.WriteString(html.EscapeString(fmt.Sprintf("%v", tc)))
+	}
+
+	// Render children
+	for _, child := range el.Children {
+		renderElementWithIDs(buf, child, counter)
+	}
+
+	// Closing tag
+	buf.WriteString("</")
+	buf.WriteString(el.Type)
+	buf.WriteByte('>')
+}
+
+// RenderToHTMLPretty renders an Element tree to an HTML string with
+// indentation for human-readable output. The indent parameter specifies
+// the string to use for each indentation level (e.g., "  " for two spaces).
+func RenderToHTMLPretty(el *Element, indent string) string {
+	if el == nil {
+		return ""
+	}
+	var buf strings.Builder
+	renderPretty(&buf, el, indent, 0)
+	return buf.String()
+}
+
+// renderPretty recursively renders an element with indentation.
+func renderPretty(buf *strings.Builder, el *Element, indent string, depth int) {
+	if el == nil {
+		return
+	}
+
+	prefix := strings.Repeat(indent, depth)
+
+	// Handle text nodes
+	if el.Type == "text" {
+		if tc, ok := el.Props["textContent"]; ok {
+			buf.WriteString(prefix)
+			buf.WriteString(html.EscapeString(fmt.Sprintf("%v", tc)))
+		}
+		return
+	}
+
+	// Check if this element is a simple text-only element (has textContent
+	// prop or a single text child, and no other children).
+	isSimpleText := false
+	simpleText := ""
+	if tc, ok := el.Props["textContent"]; ok && len(el.Children) == 0 {
+		isSimpleText = true
+		simpleText = html.EscapeString(fmt.Sprintf("%v", tc))
+	} else if len(el.Children) == 1 && el.Children[0].Type == "text" {
+		if tc, ok := el.Children[0].Props["textContent"]; ok {
+			_, hasTextProp := el.Props["textContent"]
+			if !hasTextProp {
+				isSimpleText = true
+				simpleText = html.EscapeString(fmt.Sprintf("%v", tc))
+			}
+		}
+	}
+
+	// Opening tag
+	buf.WriteString(prefix)
+	buf.WriteByte('<')
+	buf.WriteString(el.Type)
+	renderAttributes(buf, el.Props)
+
+	isSelfClosing := selfClosingTags[el.Type]
+	if isSelfClosing {
+		buf.WriteString(" />")
+		return
+	}
+
+	buf.WriteByte('>')
+
+	if isSimpleText {
+		// Inline text: <p>Hello</p>
+		buf.WriteString(simpleText)
+		buf.WriteString("</")
+		buf.WriteString(el.Type)
+		buf.WriteByte('>')
+		return
+	}
+
+	// Has complex children
+	// Render textContent prop first if present
+	if tc, ok := el.Props["textContent"]; ok {
+		buf.WriteByte('\n')
+		buf.WriteString(strings.Repeat(indent, depth+1))
+		buf.WriteString(html.EscapeString(fmt.Sprintf("%v", tc)))
+	}
+
+	// Render children
+	for _, child := range el.Children {
+		buf.WriteByte('\n')
+		renderPretty(buf, child, indent, depth+1)
+	}
+
+	buf.WriteByte('\n')
+	buf.WriteString(prefix)
+	buf.WriteString("</")
+	buf.WriteString(el.Type)
+	buf.WriteByte('>')
+}

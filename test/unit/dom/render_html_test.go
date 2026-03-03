@@ -387,3 +387,267 @@ func TestRenderToHTML_DeeplyNested(t *testing.T) {
 		t.Errorf("expected %s, got %s", expected, html)
 	}
 }
+
+// =====================================================================
+// Task 10: Complete Server-Side Element Rendering — New tests
+// =====================================================================
+
+func TestRenderToHTML_StyleAttribute(t *testing.T) {
+	el := dom.Div(dom.Style(map[string]string{"color": "red", "font-size": "16px"}))
+	html := dom.RenderToHTML(el)
+	// Style should be rendered as a style attribute. Since map iteration order
+	// is non-deterministic, check for both orderings.
+	if !strings.Contains(html, `style="`) {
+		t.Fatalf("expected style attribute, got %s", html)
+	}
+	if !strings.Contains(html, "color: red;") {
+		t.Errorf("expected color: red; in style, got %s", html)
+	}
+	if !strings.Contains(html, "font-size: 16px;") {
+		t.Errorf("expected font-size: 16px; in style, got %s", html)
+	}
+	if !strings.HasPrefix(html, "<div") || !strings.HasSuffix(html, "</div>") {
+		t.Errorf("expected div wrapper, got %s", html)
+	}
+}
+
+func TestRenderToHTML_StyleEscaping(t *testing.T) {
+	// Style values containing HTML-special characters should be escaped
+	el := dom.Div(dom.Style(map[string]string{
+		"content": `"<script>alert('xss')</script>"`,
+	}))
+	html := dom.RenderToHTML(el)
+	if strings.Contains(html, "<script>") {
+		t.Errorf("style values should be HTML-escaped, got %s", html)
+	}
+	if !strings.Contains(html, "&lt;script&gt;") {
+		t.Errorf("expected escaped script tag in style value, got %s", html)
+	}
+}
+
+func TestRenderToHTML_DataGolemIdIncrementing(t *testing.T) {
+	el := dom.Div(
+		dom.Span("one"),
+		dom.P("two"),
+		dom.Div(
+			dom.Span("three"),
+		),
+	)
+	html := dom.RenderToHTMLWithIDs(el)
+
+	// The outer div should get data-golem-id="0"
+	if !strings.Contains(html, `data-golem-id="0"`) {
+		t.Errorf("expected data-golem-id=0 on outer div, got %s", html)
+	}
+	// Span "one" should get data-golem-id="1"
+	if !strings.Contains(html, `data-golem-id="1"`) {
+		t.Errorf("expected data-golem-id=1 on first child, got %s", html)
+	}
+	// P "two" should get data-golem-id="2"
+	if !strings.Contains(html, `data-golem-id="2"`) {
+		t.Errorf("expected data-golem-id=2 on second child, got %s", html)
+	}
+	// Inner div should get data-golem-id="3"
+	if !strings.Contains(html, `data-golem-id="3"`) {
+		t.Errorf("expected data-golem-id=3 on inner div, got %s", html)
+	}
+	// Inner span should get data-golem-id="4"
+	if !strings.Contains(html, `data-golem-id="4"`) {
+		t.Errorf("expected data-golem-id=4 on inner span, got %s", html)
+	}
+}
+
+func TestRenderDocument_BasicHTML(t *testing.T) {
+	body := dom.Div(dom.Id("app"), dom.P("Hello, World!"))
+	html := dom.RenderDocument(body, dom.DocumentOptions{
+		Title: "My App",
+	})
+
+	if !strings.HasPrefix(html, "<!DOCTYPE html>") {
+		t.Errorf("expected DOCTYPE at start, got %s", html[:50])
+	}
+	if !strings.Contains(html, "<html lang=\"en\">") {
+		t.Errorf("expected html tag with lang=en, got %s", html)
+	}
+	if !strings.Contains(html, "<head>") {
+		t.Errorf("expected head tag, got %s", html)
+	}
+	if !strings.Contains(html, "<title>My App</title>") {
+		t.Errorf("expected title tag, got %s", html)
+	}
+	if !strings.Contains(html, "<body>") {
+		t.Errorf("expected body tag, got %s", html)
+	}
+	if !strings.Contains(html, "</html>") {
+		t.Errorf("expected closing html tag, got %s", html)
+	}
+	if !strings.Contains(html, `id="app"`) {
+		t.Errorf("expected app div in body, got %s", html)
+	}
+	if !strings.Contains(html, "Hello, World!") {
+		t.Errorf("expected body content, got %s", html)
+	}
+}
+
+func TestRenderDocument_CustomLang(t *testing.T) {
+	body := dom.Div()
+	html := dom.RenderDocument(body, dom.DocumentOptions{
+		Title: "Test",
+		Lang:  "fr",
+	})
+	if !strings.Contains(html, `<html lang="fr">`) {
+		t.Errorf("expected lang=fr, got %s", html)
+	}
+}
+
+func TestRenderDocument_WithMeta(t *testing.T) {
+	body := dom.Div()
+	html := dom.RenderDocument(body, dom.DocumentOptions{
+		Title: "Test",
+		Meta: map[string]string{
+			"description": "A test page",
+			"viewport":    "width=device-width, initial-scale=1",
+		},
+	})
+	if !strings.Contains(html, `<meta name="description" content="A test page"`) {
+		t.Errorf("expected description meta tag, got %s", html)
+	}
+	if !strings.Contains(html, `<meta name="viewport" content="width=device-width, initial-scale=1"`) {
+		t.Errorf("expected viewport meta tag, got %s", html)
+	}
+}
+
+func TestRenderDocument_WithScripts(t *testing.T) {
+	body := dom.Div()
+	html := dom.RenderDocument(body, dom.DocumentOptions{
+		Title:   "Test",
+		Scripts: []string{"app.js", "vendor.js"},
+	})
+	if !strings.Contains(html, `<script src="app.js"></script>`) {
+		t.Errorf("expected app.js script tag, got %s", html)
+	}
+	if !strings.Contains(html, `<script src="vendor.js"></script>`) {
+		t.Errorf("expected vendor.js script tag, got %s", html)
+	}
+}
+
+func TestRenderDocument_WithStyles(t *testing.T) {
+	body := dom.Div()
+	html := dom.RenderDocument(body, dom.DocumentOptions{
+		Title:  "Test",
+		Styles: []string{"style.css", "theme.css"},
+	})
+	if !strings.Contains(html, `<link rel="stylesheet" href="style.css"`) {
+		t.Errorf("expected style.css link tag, got %s", html)
+	}
+	if !strings.Contains(html, `<link rel="stylesheet" href="theme.css"`) {
+		t.Errorf("expected theme.css link tag, got %s", html)
+	}
+}
+
+func TestRenderDocument_WithWASM(t *testing.T) {
+	body := dom.Div(dom.Id("app"))
+	html := dom.RenderDocument(body, dom.DocumentOptions{
+		Title:        "WASM App",
+		WasmPath:     "app.wasm",
+		WasmExecPath: "wasm_exec.js",
+	})
+
+	// Should include wasm_exec.js
+	if !strings.Contains(html, `<script src="wasm_exec.js"></script>`) {
+		t.Errorf("expected wasm_exec.js script tag, got %s", html)
+	}
+	// Should include WASM bootstrap code
+	if !strings.Contains(html, "WebAssembly.instantiateStreaming") {
+		t.Errorf("expected WebAssembly.instantiateStreaming in output, got %s", html)
+	}
+	if !strings.Contains(html, "app.wasm") {
+		t.Errorf("expected app.wasm path in WASM bootstrap, got %s", html)
+	}
+	if !strings.Contains(html, "new Go()") {
+		t.Errorf("expected Go runtime instantiation in WASM bootstrap, got %s", html)
+	}
+}
+
+func TestRenderToHTMLPretty_Indentation(t *testing.T) {
+	el := dom.Div(dom.Class("outer"),
+		dom.P("Hello"),
+		dom.Div(dom.Class("inner"),
+			dom.Span("World"),
+		),
+	)
+	html := dom.RenderToHTMLPretty(el, "  ")
+
+	lines := strings.Split(html, "\n")
+
+	// First line should be the opening div (no indent at top level)
+	if !strings.HasPrefix(lines[0], "<div") {
+		t.Errorf("expected first line to start with <div, got %q", lines[0])
+	}
+
+	// Check that child elements are indented
+	foundIndentedP := false
+	foundDoubleIndentedSpan := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(line, "  ") && strings.HasPrefix(trimmed, "<p>") {
+			foundIndentedP = true
+		}
+		if strings.HasPrefix(line, "    ") && strings.HasPrefix(trimmed, "<span>") {
+			foundDoubleIndentedSpan = true
+		}
+	}
+
+	if !foundIndentedP {
+		t.Errorf("expected indented <p> element, got:\n%s", html)
+	}
+	if !foundDoubleIndentedSpan {
+		t.Errorf("expected double-indented <span> element, got:\n%s", html)
+	}
+}
+
+func TestRenderToHTMLPretty_SelfClosing(t *testing.T) {
+	el := dom.Div(
+		dom.Input(dom.Type("text")),
+	)
+	html := dom.RenderToHTMLPretty(el, "  ")
+
+	if !strings.Contains(html, "  <input") {
+		t.Errorf("expected indented input, got:\n%s", html)
+	}
+	if !strings.Contains(html, "/>") {
+		t.Errorf("expected self-closing input tag, got:\n%s", html)
+	}
+}
+
+func TestRenderToHTMLPretty_TextNoExtraLine(t *testing.T) {
+	// For elements with only text content and no child elements,
+	// the text should be inline: <p>Hello</p>
+	el := dom.P("Hello")
+	html := dom.RenderToHTMLPretty(el, "  ")
+	if html != "<p>Hello</p>" {
+		t.Errorf("expected inline text element, got %q", html)
+	}
+}
+
+func TestStyle_EmptyMap(t *testing.T) {
+	el := dom.Div(dom.Style(map[string]string{}))
+	html := dom.RenderToHTML(el)
+	// Empty style map should not produce a style attribute
+	if strings.Contains(html, "style") {
+		t.Errorf("empty style map should not produce style attribute, got %s", html)
+	}
+}
+
+func TestRenderToHTMLWithIDs_SelfClosing(t *testing.T) {
+	el := dom.Div(
+		dom.Input(dom.Type("text")),
+	)
+	html := dom.RenderToHTMLWithIDs(el)
+	if !strings.Contains(html, `data-golem-id="0"`) {
+		t.Errorf("expected data-golem-id=0 on div, got %s", html)
+	}
+	if !strings.Contains(html, `data-golem-id="1"`) {
+		t.Errorf("expected data-golem-id=1 on input, got %s", html)
+	}
+}
