@@ -11,11 +11,16 @@ import (
 
 // Stub Element type for non-WASM builds
 type Element struct {
-	Type          string
-	Props         map[string]interface{}
-	Children      []*Element
-	EventHandlers map[string]func()
-	JSElement     interface{}
+	Type             string
+	Props            map[string]interface{}
+	Children         []*Element
+	EventHandlers    map[string]func()
+	JSElement        interface{}
+	MountCallbacks   []func() func() // returns cleanup function
+	UnmountCallbacks []func()
+	UpdateCallbacks  []func()
+	Cleanups         []func() // stored cleanup functions from mount
+	IsMounted        bool
 }
 
 // Attribute represents an HTML attribute
@@ -28,6 +33,12 @@ type Attribute struct {
 type EventAttribute struct {
 	Name    string
 	Handler interface{}
+}
+
+// LifecycleAttribute represents a lifecycle hook to be applied to an element.
+type LifecycleAttribute struct {
+	Kind    string      // "mount", "unmount", or "update"
+	Handler interface{} // func() func() for mount, func() for unmount/update
 }
 
 // selfClosingTags are HTML elements that should not have a closing tag.
@@ -57,6 +68,9 @@ func NewElement(tagType string, args ...interface{}) *Element {
 	props := make(map[string]interface{})
 	eventHandlers := make(map[string]func())
 	children := make([]*Element, 0)
+	var mountCallbacks []func() func()
+	var unmountCallbacks []func()
+	var updateCallbacks []func()
 
 	for _, arg := range args {
 		switch v := arg.(type) {
@@ -70,6 +84,21 @@ func NewElement(tagType string, args ...interface{}) *Element {
 				eventHandlers[v.Name] = handler
 			}
 			// For non-func() handlers, we just skip them on server side
+		case LifecycleAttribute:
+			switch v.Kind {
+			case "mount":
+				if fn, ok := v.Handler.(func() func()); ok {
+					mountCallbacks = append(mountCallbacks, fn)
+				}
+			case "unmount":
+				if fn, ok := v.Handler.(func()); ok {
+					unmountCallbacks = append(unmountCallbacks, fn)
+				}
+			case "update":
+				if fn, ok := v.Handler.(func()); ok {
+					updateCallbacks = append(updateCallbacks, fn)
+				}
+			}
 		case *Element:
 			children = append(children, v)
 		case string:
@@ -85,10 +114,13 @@ func NewElement(tagType string, args ...interface{}) *Element {
 	}
 
 	return &Element{
-		Type:          tagType,
-		Props:         props,
-		Children:      children,
-		EventHandlers: eventHandlers,
+		Type:             tagType,
+		Props:            props,
+		Children:         children,
+		EventHandlers:    eventHandlers,
+		MountCallbacks:   mountCallbacks,
+		UnmountCallbacks: unmountCallbacks,
+		UpdateCallbacks:  updateCallbacks,
 	}
 }
 
@@ -219,6 +251,11 @@ func isEventHandlerProp(name string) bool {
 	return strings.HasPrefix(name, "on")
 }
 
+// Remove removes the element (stub for non-WASM builds).
+func (e *Element) Remove() {
+	// Stub implementation: callbacks are stored but not fired in non-WASM builds.
+}
+
 // Helpers for creating common attributes
 func Class(className string) Attribute {
 	return Attribute{Name: "class", Value: className}
@@ -250,6 +287,22 @@ func Checked(checked bool) Attribute {
 
 func Autofocus(focus bool) Attribute {
 	return Attribute{Name: "autofocus", Value: focus}
+}
+
+// OnMount registers a callback that runs after element is added to DOM.
+// The callback can return a cleanup function that runs on unmount.
+func OnMount(fn func() func()) LifecycleAttribute {
+	return LifecycleAttribute{Kind: "mount", Handler: fn}
+}
+
+// OnUnmount registers a callback that runs before element is removed from DOM.
+func OnUnmount(fn func()) LifecycleAttribute {
+	return LifecycleAttribute{Kind: "unmount", Handler: fn}
+}
+
+// OnUpdate registers a callback that runs after element re-renders.
+func OnUpdate(fn func()) LifecycleAttribute {
+	return LifecycleAttribute{Kind: "update", Handler: fn}
 }
 
 func Disabled(disabled bool) Attribute {

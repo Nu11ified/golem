@@ -10,11 +10,16 @@ import (
 
 // Element represents a virtual DOM element
 type Element struct {
-	Type          string
-	Props         map[string]interface{}
-	Children      []*Element
-	EventHandlers map[string]js.Func
-	JSElement     js.Value
+	Type             string
+	Props            map[string]interface{}
+	Children         []*Element
+	EventHandlers    map[string]js.Func
+	JSElement        js.Value
+	MountCallbacks   []func() func() // returns cleanup function
+	UnmountCallbacks []func()
+	UpdateCallbacks  []func()
+	Cleanups         []func() // stored cleanup functions from mount
+	IsMounted        bool
 }
 
 // Attribute represents an HTML attribute
@@ -29,11 +34,20 @@ type EventAttribute struct {
 	Handler interface{}
 }
 
+// LifecycleAttribute represents a lifecycle hook to be applied to an element.
+type LifecycleAttribute struct {
+	Kind    string      // "mount", "unmount", or "update"
+	Handler interface{} // func() func() for mount, func() for unmount/update
+}
+
 // NewElement creates a new virtual DOM element with mixed arguments
 func NewElement(tagType string, args ...interface{}) *Element {
 	props := make(map[string]interface{})
 	eventHandlers := make(map[string]js.Func)
 	children := make([]*Element, 0)
+	var mountCallbacks []func() func()
+	var unmountCallbacks []func()
+	var updateCallbacks []func()
 
 	for _, arg := range args {
 		switch v := arg.(type) {
@@ -44,6 +58,21 @@ func NewElement(tagType string, args ...interface{}) *Element {
 		case EventAttribute:
 			if fn, ok := createEventHandler(v); ok {
 				eventHandlers[v.Name] = fn
+			}
+		case LifecycleAttribute:
+			switch v.Kind {
+			case "mount":
+				if fn, ok := v.Handler.(func() func()); ok {
+					mountCallbacks = append(mountCallbacks, fn)
+				}
+			case "unmount":
+				if fn, ok := v.Handler.(func()); ok {
+					unmountCallbacks = append(unmountCallbacks, fn)
+				}
+			case "update":
+				if fn, ok := v.Handler.(func()); ok {
+					updateCallbacks = append(updateCallbacks, fn)
+				}
 			}
 		case *Element:
 			children = append(children, v)
@@ -60,10 +89,13 @@ func NewElement(tagType string, args ...interface{}) *Element {
 	}
 
 	return &Element{
-		Type:          tagType,
-		Props:         props,
-		Children:      children,
-		EventHandlers: eventHandlers,
+		Type:             tagType,
+		Props:            props,
+		Children:         children,
+		EventHandlers:    eventHandlers,
+		MountCallbacks:   mountCallbacks,
+		UnmountCallbacks: unmountCallbacks,
+		UpdateCallbacks:  updateCallbacks,
 	}
 }
 
@@ -118,8 +150,10 @@ func (e *Element) Render() js.Value {
 		return e.JSElement
 	}
 
+	isNew := e.JSElement.IsUndefined()
+
 	// Create DOM element if it doesn't exist
-	if e.JSElement.IsUndefined() {
+	if isNew {
 		doc := js.Global().Get("document")
 		e.JSElement = doc.Call("createElement", e.Type)
 
@@ -156,6 +190,16 @@ func (e *Element) Render() js.Value {
 		e.JSElement.Call("appendChild", childElement)
 	}
 
+	// Fire mount callbacks for newly created elements
+	if isNew && !e.IsMounted {
+		e.IsMounted = true
+		for _, cb := range e.MountCallbacks {
+			if cleanup := cb(); cleanup != nil {
+				e.Cleanups = append(e.Cleanups, cleanup)
+			}
+		}
+	}
+
 	return e.JSElement
 }
 
@@ -183,6 +227,35 @@ func (e *Element) Update(newProps map[string]interface{}) {
 			}
 		}
 	}
+
+	// Fire update callbacks
+	for _, cb := range e.UpdateCallbacks {
+		cb()
+	}
+}
+
+// Remove removes the element from the DOM and fires unmount callbacks.
+func (e *Element) Remove() {
+	// Fire unmount callbacks
+	for _, cb := range e.UnmountCallbacks {
+		cb()
+	}
+
+	// Run stored cleanup functions from mount callbacks
+	for _, cleanup := range e.Cleanups {
+		cleanup()
+	}
+	e.Cleanups = nil
+
+	// Remove from DOM
+	if !e.JSElement.IsUndefined() {
+		parent := e.JSElement.Get("parentNode")
+		if !parent.IsNull() && !parent.IsUndefined() {
+			parent.Call("removeChild", e.JSElement)
+		}
+	}
+
+	e.IsMounted = false
 }
 
 // Helpers for creating common attributes
@@ -236,6 +309,22 @@ func OnChange(handler func(checked bool)) EventAttribute {
 
 func OnKeyDown(handler func(key string)) EventAttribute {
 	return On("keydown", handler)
+}
+
+// OnMount registers a callback that runs after element is added to DOM.
+// The callback can return a cleanup function that runs on unmount.
+func OnMount(fn func() func()) LifecycleAttribute {
+	return LifecycleAttribute{Kind: "mount", Handler: fn}
+}
+
+// OnUnmount registers a callback that runs before element is removed from DOM.
+func OnUnmount(fn func()) LifecycleAttribute {
+	return LifecycleAttribute{Kind: "unmount", Handler: fn}
+}
+
+// OnUpdate registers a callback that runs after element re-renders.
+func OnUpdate(fn func()) LifecycleAttribute {
+	return LifecycleAttribute{Kind: "update", Handler: fn}
 }
 
 func Disabled(disabled bool) Attribute {
