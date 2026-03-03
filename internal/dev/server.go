@@ -14,13 +14,32 @@ import (
 
 	"github.com/Nu11ified/golem/internal/config"
 	"github.com/Nu11ified/golem/internal/functions"
-	"nhooyr.io/websocket"
+	"github.com/Nu11ified/golem/internal/hmr"
 )
+
+// DevCompiler wraps the Server's build methods to implement the HMRCompiler interface.
+type DevCompiler struct {
+	server *Server
+}
+
+// CompileModule compiles a single page module. For now this delegates to a
+// full rebuild, but the interface allows future optimization.
+func (dc *DevCompiler) CompileModule(modulePath string) error {
+	return dc.server.buildDevWasm()
+}
+
+// CompileAll performs a full rebuild of all WASM modules.
+func (dc *DevCompiler) CompileAll() error {
+	return dc.server.buildDevWasm()
+}
 
 // Server represents the development server
 type Server struct {
-	config   *config.Config
-	registry *functions.Registry
+	config      *config.Config
+	registry    *functions.Registry
+	broadcaster *Broadcaster
+	hmrManager  *HMRManager
+	watcher     *FileWatcher
 }
 
 // NewServer creates a new development server
@@ -40,9 +59,28 @@ func (s *Server) Start() error {
 		log.Printf("Warning: Failed to initialize function registry: %v", err)
 	}
 
-	// Set up file watcher for hot reload
+	// Set up HMR components for hot reload
 	if s.config.Dev.HotReload {
-		go s.watchFiles()
+		s.broadcaster = NewBroadcaster()
+
+		// Determine watch directories
+		watchDirs := s.config.Dev.Watch
+		if len(watchDirs) == 0 {
+			watchDirs = []string{"src"}
+		}
+
+		s.watcher = NewFileWatcher(watchDirs)
+		splitter := hmr.NewModuleSplitter(".")
+		compiler := &DevCompiler{server: s}
+
+		s.hmrManager = NewHMRManager(s.watcher.Events, splitter, s.broadcaster, compiler)
+		s.hmrManager.Start()
+
+		if err := s.watcher.Start(); err != nil {
+			log.Printf("Warning: Failed to start file watcher: %v", err)
+		} else {
+			log.Println("File watcher started")
+		}
 	}
 
 	// Start gRPC server in background for development
@@ -131,9 +169,12 @@ func (s *Server) Start() error {
 		})
 	})
 
-	// WebSocket endpoint for hot reload
+	// HMR endpoints for hot reload
 	if s.config.Dev.HotReload {
-		mux.HandleFunc("/ws", s.handleWebSocket)
+		mux.HandleFunc("/golem-hmr", s.broadcaster.HandleWebSocket)
+		mux.HandleFunc("/golem-hmr.js", ServeHMRBridge())
+		// Keep legacy /ws endpoint for backward compatibility
+		mux.HandleFunc("/ws", s.broadcaster.HandleWebSocket)
 	}
 
 	fmt.Printf("🌟 Golem dev server running at http://localhost:%d\n", port)
@@ -320,15 +361,7 @@ func (s *Server) generateDevHTML() string {
 	hotReloadScript := ""
 	if s.config.Dev.HotReload {
 		hotReloadScript = `
-    <script>
-        // Hot reload WebSocket connection
-        const ws = new WebSocket('ws://localhost:` + fmt.Sprintf("%d", s.config.Dev.Port) + `/ws');
-        ws.onmessage = function(event) {
-            if (event.data === 'reload') {
-                window.location.reload();
-            }
-        };
-    </script>`
+    <script src="/golem-hmr.js"></script>`
 	}
 
 	cacheBuster := fmt.Sprintf("%d", time.Now().UnixNano())
@@ -600,33 +633,12 @@ import (
 	return os.WriteFile(mainFile, []byte(content), 0644)
 }
 
-func (s *Server) watchFiles() {
-	// File watcher implementation for hot reload
-	// This would watch the files specified in config.Dev.Watch
-	log.Println("🔍 File watcher started")
-
-	// Placeholder - would implement actual file watching
-	// using fsnotify or similar
-}
-
-func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	// This is a basic WebSocket handler to prevent connection errors in the browser.
-	// Full hot-reload logic is not implemented yet.
-	c, err := websocket.Accept(w, r, nil)
-	if err != nil {
-		log.Printf("could not upgrade to websocket: %v", err)
-		return
+// Stop gracefully stops the development server's background components.
+func (s *Server) Stop() {
+	if s.hmrManager != nil {
+		s.hmrManager.Stop()
 	}
-	defer c.Close(websocket.StatusInternalError, "internal error")
-
-	log.Println("WebSocket client connected.")
-
-	// Keep the connection open but do nothing.
-	// This prevents the connection from being immediately closed and causing errors.
-	for {
-		_, _, err := c.Read(r.Context())
-		if err != nil {
-			break
-		}
+	if s.watcher != nil {
+		s.watcher.Stop()
 	}
 }
