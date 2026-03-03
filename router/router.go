@@ -13,15 +13,18 @@ import (
 
 // Route represents a single route
 type Route struct {
-	Path       string
-	Component  func(params map[string]string) *dom.Element
-	Guards     []Guard
-	Children   []*Route
-	Meta       map[string]interface{}
-	Name       string
-	Redirect   string
-	Regex      *regexp.Regexp
-	ParamNames []string
+	Path          string
+	Component     func(params map[string]string) *dom.Element
+	Guards        []Guard
+	Children      []*Route
+	Meta          map[string]interface{}
+	Name          string
+	Redirect      string
+	Regex         *regexp.Regexp
+	ParamNames    []string
+	Layout        func(content *dom.Element) *dom.Element
+	ErrorHandler  func(err error) *dom.Element
+	ParallelSlots map[string]func(params map[string]string) *dom.Element
 }
 
 // Guard represents a route guard
