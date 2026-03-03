@@ -32,8 +32,7 @@ type routeEntry struct {
 	HasError         bool
 	IsIntercepting   bool
 	InterceptTarget  string
-	ParallelSlots    map[string]*parallelSlotEntry // slot name -> slot entry
-	ParentLayoutVar  string           // variable name for parent layout route (for chaining)
+	ParallelSlots   map[string]*parallelSlotEntry // slot name -> slot entry
 }
 
 // GenerateRoutes takes a scanned route tree and module name, returns generated Go source code.
@@ -223,11 +222,8 @@ func collectRoutes(route *ScannedRoute, moduleName string, imports map[string]ro
 
 		// Error handler
 		if route.ErrorFile != "" {
-			errorImportPath := dirToImportPath(route.DirPath, moduleName)
-			errorAlias := alias // same package as page
 			entry.HasError = true
-			entry.ErrorAlias = errorAlias
-			_ = errorImportPath
+			entry.ErrorAlias = alias // same package as page
 		}
 
 		// Intercepting route

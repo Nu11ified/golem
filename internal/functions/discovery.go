@@ -1,3 +1,5 @@
+//go:build !js || !wasm
+
 package functions
 
 import (
@@ -493,7 +495,7 @@ func (r *Registry) findGoFiles(dir string) ([]string, error) {
 // generateAndBuildImports creates import statements for server packages
 func (r *Registry) generateAndBuildImports(serverDir string, goFiles []string) error {
 	// Parse the go.mod file to get the module name
-	moduleName, err := r.getModuleName()
+	moduleName, err := GetModuleName()
 	if err != nil {
 		log.Printf("Warning: Could not determine module name: %v", err)
 		return nil
@@ -537,10 +539,6 @@ func GetModuleName() (string, error) {
 	return "", fmt.Errorf("module name not found in go.mod")
 }
 
-// getModuleName reads the module name from go.mod (private method)
-func (r *Registry) getModuleName() (string, error) {
-	return GetModuleName()
-}
 
 // createImportFile creates a temporary file that imports all server packages
 func (r *Registry) createImportFile(packages map[string]bool) error {

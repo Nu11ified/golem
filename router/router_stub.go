@@ -474,10 +474,27 @@ func CreateLinkWithClass(to, text, class string) *dom.Element {
 // BuildLayoutChain wraps content in the route's layout and any parent layouts.
 // It walks up the route hierarchy applying layouts from innermost to outermost.
 func BuildLayoutChain(route *Route, content *dom.Element) *dom.Element {
-	if route == nil || route.Layout == nil {
+	if route == nil || content == nil {
 		return content
 	}
-	return route.Layout(content)
+
+	result := content
+
+	// Apply this route's layout first (innermost)
+	if route.Layout != nil {
+		result = route.Layout(result)
+	}
+
+	// Walk up the parent chain
+	parent := route.ParentRoute
+	for parent != nil {
+		if parent.Layout != nil {
+			result = parent.Layout(result)
+		}
+		parent = parent.ParentRoute
+	}
+
+	return result
 }
 
 // RenderWithErrorBoundary renders the route component, catching panics and

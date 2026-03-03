@@ -517,6 +517,11 @@ func hydrateNode(element *Element, domNode js.Value, counter *int) {
 	}
 }
 
+// El creates a new element with the given tag. Alias for NewElement.
+func El(tag string, args ...interface{}) *Element {
+	return NewElement(tag, args...)
+}
+
 // Alert shows a browser alert
 func Alert(message string) {
 	js.Global().Call("alert", message)

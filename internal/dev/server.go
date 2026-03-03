@@ -1,3 +1,5 @@
+//go:build !js || !wasm
+
 package dev
 
 import (
@@ -141,7 +143,9 @@ func (s *Server) Start() error {
 		}
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(apiInfo)
+		if err := json.NewEncoder(w).Encode(apiInfo); err != nil {
+			log.Printf("Error encoding API info: %v", err)
+		}
 	})
 
 	// List functions endpoint for development debugging
@@ -159,9 +163,11 @@ func (s *Server) Start() error {
 
 		functions := s.registry.ListFunctions("")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
 			"functions": functions,
-		})
+		}); err != nil {
+			log.Printf("Error encoding functions list: %v", err)
+		}
 	})
 
 	// Serve the HMR bridge JavaScript
@@ -577,24 +583,6 @@ if (typeof module !== 'undefined' && module.exports) {
 
 	fmt.Println("WebAssembly build completed")
 	return nil
-}
-
-func (s *Server) watchFiles() {
-	log.Println("File watcher started")
-
-	watcher := NewFileWatcher("src", 500*time.Millisecond)
-	watcher.OnChange(func(path string) {
-		log.Printf("File changed: %s — rebuilding...", path)
-		start := time.Now()
-		if err := s.buildDevWasm(); err != nil {
-			log.Printf("Build failed: %v", err)
-			s.broadcastError(err.Error())
-			return
-		}
-		log.Printf("Rebuild completed in %v", time.Since(start))
-		s.broadcastReload()
-	})
-	watcher.Start()
 }
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {

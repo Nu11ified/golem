@@ -122,12 +122,22 @@ func (g *Generator) generatePage(pc PageConfig) Result {
 // generateFallbackHTML creates a simple loading page for dynamic routes.
 func (g *Generator) generateFallbackHTML(pc PageConfig, opts dom.DocumentOptions) string {
 	var buf strings.Builder
-	buf.WriteString("<!DOCTYPE html>\n<html>\n<head>\n")
+	lang := opts.Lang
+	if lang == "" {
+		lang = "en"
+	}
+	buf.WriteString(fmt.Sprintf("<!DOCTYPE html>\n<html lang=\"%s\">\n<head>\n", lang))
 	if opts.Title != "" {
 		buf.WriteString(fmt.Sprintf("<title>%s</title>\n", opts.Title))
 	}
+	for _, href := range opts.Styles {
+		buf.WriteString(fmt.Sprintf("<link rel=\"stylesheet\" href=\"%s\" />\n", href))
+	}
 	buf.WriteString("</head>\n<body>\n")
 	buf.WriteString("<div id=\"app\"><p>Loading...</p></div>\n")
+	for _, src := range opts.Scripts {
+		buf.WriteString(fmt.Sprintf("<script src=\"%s\"></script>\n", src))
+	}
 	buf.WriteString("</body>\n</html>")
 	return buf.String()
 }

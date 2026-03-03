@@ -1,3 +1,5 @@
+//go:build !js || !wasm
+
 package dev
 
 import (
@@ -19,6 +21,7 @@ type FileWatcher struct {
 	stopCh   chan struct{}
 	mu       sync.Mutex
 	started  chan struct{} // closed after the first scan completes
+	stopOnce sync.Once
 }
 
 // NewFileWatcher creates a new polling-based file watcher that monitors
@@ -65,10 +68,12 @@ func (w *FileWatcher) Start() {
 	}
 }
 
-// Stop signals the watcher to stop. It is safe to call from any goroutine.
-// Calling Stop more than once will panic (closing a closed channel).
+// Stop signals the watcher to stop. It is safe to call from any goroutine
+// and safe to call multiple times.
 func (w *FileWatcher) Stop() {
-	close(w.stopCh)
+	w.stopOnce.Do(func() {
+		close(w.stopCh)
+	})
 }
 
 // scan walks the root directory and compares modification times.

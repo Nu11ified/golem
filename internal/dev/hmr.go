@@ -1,3 +1,5 @@
+//go:build !js || !wasm
+
 package dev
 
 import (
@@ -89,6 +91,9 @@ func (m *HMRManager) Stop() {
 
 // processPending processes accumulated file changes.
 func (m *HMRManager) processPending() {
+	m.wg.Add(1)
+	defer m.wg.Done()
+
 	m.mu.Lock()
 	files := m.pending
 	m.pending = nil
@@ -97,9 +102,6 @@ func (m *HMRManager) processPending() {
 	if len(files) == 0 {
 		return
 	}
-
-	m.wg.Add(1)
-	defer m.wg.Done()
 
 	allModules, err := m.splitter.Analyze()
 	if err != nil {

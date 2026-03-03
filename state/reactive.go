@@ -620,11 +620,8 @@ func (rs *ReactiveState) Update(updater func(interface{}) interface{}) {
 	copy(observers, rs.observers)
 	rs.mutex.Unlock()
 
-	fmt.Printf("🔄 ReactiveState.Update: state changed, notifying %d observers\n", len(observers))
-
 	// Notify observers outside the lock
-	for i, observer := range observers {
-		fmt.Printf("  📢 Notifying observer %d\n", i)
+	for _, observer := range observers {
 		observer(newValue)
 	}
 }
@@ -650,27 +647,22 @@ func (rs *ReactiveState) Subscribe(observer func(interface{})) func() {
 func (rs *ReactiveState) WithState(renderFn func(interface{}) *dom.Element) *dom.Element {
 	// Initial render
 	element := renderFn(rs.Get())
-	fmt.Printf("🎨 ReactiveState.WithState: Initial render complete\n")
 
 	// Subscribe to state changes and re-render
 	rs.Subscribe(func(newState interface{}) {
-		fmt.Printf("🎨 ReactiveState.WithState: State changed, triggering re-render\n")
 		newElement := renderFn(newState)
 
 		// Ensure both elements are rendered
 		if element.JSElement.IsUndefined() {
-			fmt.Printf("  🔧 Initial element not rendered, rendering now\n")
 			element.Render()
 		}
 
 		renderedNewElement := newElement.Render()
-		fmt.Printf("  🔧 New element rendered\n")
 
 		// Replace the old element with the new one in the DOM
 		if !element.JSElement.IsUndefined() {
 			parent := element.JSElement.Get("parentNode")
 			if !parent.IsUndefined() && !parent.IsNull() {
-				fmt.Printf("  🔄 Replacing DOM element\n")
 				parent.Call("replaceChild", renderedNewElement, element.JSElement)
 
 				// Update the element reference to point to the new DOM node
@@ -679,12 +671,7 @@ func (rs *ReactiveState) WithState(renderFn func(interface{}) *dom.Element) *dom
 				element.Children = newElement.Children
 				element.Type = newElement.Type
 				element.EventHandlers = newElement.EventHandlers
-				fmt.Printf("  ✅ DOM element replaced successfully\n")
-			} else {
-				fmt.Printf("  ❌ Parent element not found in DOM\n")
 			}
-		} else {
-			fmt.Printf("  ❌ Original element JSElement is undefined\n")
 		}
 	})
 

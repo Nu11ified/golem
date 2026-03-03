@@ -56,7 +56,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Fresh cache hit - serve immediately
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("X-Cache", "HIT")
-		w.Write(data)
+		if _, err := w.Write(data); err != nil {
+			log.Printf("[ISR] Write error for %s: %v", path, err)
+		}
 		return
 	}
 
@@ -64,7 +66,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Stale cache hit - serve stale and trigger background revalidation
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("X-Cache", "STALE")
-		w.Write(data)
+		if _, err := w.Write(data); err != nil {
+			log.Printf("[ISR] Write error for %s: %v", path, err)
+		}
 		h.triggerRevalidation(path)
 		return
 	}
@@ -84,7 +88,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("X-Cache", "MISS")
-	w.Write([]byte(html))
+	if _, err := w.Write([]byte(html)); err != nil {
+		log.Printf("[ISR] Write error for %s: %v", path, err)
+	}
 }
 
 // Revalidate forces re-rendering of a specific path.
@@ -157,7 +163,7 @@ func (h *Handler) RevalidationHandler() http.Handler {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"revalidated":true}`))
+			_, _ = w.Write([]byte(`{"revalidated":true}`))
 			return
 		}
 
@@ -165,7 +171,7 @@ func (h *Handler) RevalidationHandler() http.Handler {
 			h.RevalidateByTag(tag)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"revalidated":true}`))
+			_, _ = w.Write([]byte(`{"revalidated":true}`))
 			return
 		}
 

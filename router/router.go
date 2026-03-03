@@ -298,6 +298,12 @@ func (r *Router) Navigate(path string) error {
 	return nil
 }
 
+// MatchRoute finds a matching route for the path. Exported for SSR use.
+// Skips intercepting routes.
+func (r *Router) MatchRoute(path string) (*Route, map[string]string) {
+	return r.matchRoute(path)
+}
+
 // matchRoute finds a matching route for the path (skips intercepting routes)
 func (r *Router) matchRoute(path string) (*Route, map[string]string) {
 	for _, route := range r.routes {
