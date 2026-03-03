@@ -37,16 +37,17 @@ type Guard func(to *Route, from *Route, params map[string]string) bool
 
 // Router manages client-side routing
 type Router struct {
-	routes          []*Route
-	currentRoute    *Route
-	currentParams   map[string]string
-	beforeEach      []Guard
-	afterEach       []func(*Route, *Route)
-	notFoundHandler func() *dom.Element
-	errorHandler    func(error) *dom.Element
-	baseURL         string
-	mode            RouterMode
-	container       string // CSS selector for router outlet
+	routes             []*Route
+	currentRoute       *Route
+	currentParams      map[string]string
+	beforeEach         []Guard
+	afterEach          []func(*Route, *Route)
+	notFoundHandler    func() *dom.Element
+	errorHandler       func(error) *dom.Element
+	baseURL            string
+	mode               RouterMode
+	container          string // CSS selector for router outlet
+	IsDirectNavigation bool   // true when the page was loaded directly (not via client-side nav)
 }
 
 // RouterMode defines routing modes
@@ -60,12 +61,13 @@ const (
 // NewRouter creates a new router instance
 func NewRouter() *Router {
 	return &Router{
-		routes:        make([]*Route, 0),
-		currentParams: make(map[string]string),
-		beforeEach:    make([]Guard, 0),
-		afterEach:     make([]func(*Route, *Route), 0),
-		mode:          HashMode,
-		container:     "#router-outlet",
+		routes:             make([]*Route, 0),
+		currentParams:      make(map[string]string),
+		beforeEach:         make([]Guard, 0),
+		afterEach:          make([]func(*Route, *Route), 0),
+		mode:               HashMode,
+		container:          "#router-outlet",
+		IsDirectNavigation: true, // initial page load is always direct
 	}
 }
 
@@ -190,6 +192,8 @@ func (r *Router) setupEventListeners() {
 	if r.mode == HistoryMode {
 		// Listen for popstate events (back/forward buttons)
 		popstateHandler := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+			// Browser back/forward is client-side navigation (app is already loaded)
+			r.IsDirectNavigation = false
 			r.handleCurrentLocation()
 			return nil
 		})
@@ -197,6 +201,8 @@ func (r *Router) setupEventListeners() {
 	} else {
 		// Listen for hashchange events
 		hashchangeHandler := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+			// Hash change is client-side navigation (app is already loaded)
+			r.IsDirectNavigation = false
 			r.handleCurrentLocation()
 			return nil
 		})
@@ -239,6 +245,13 @@ func (r *Router) Navigate(path string) error {
 			return nil
 		}
 		return fmt.Errorf("route not found: %s", path)
+	}
+
+	// For client-side navigation, check if an intercepting route should be used
+	if !r.IsDirectNavigation {
+		if interceptRoute := r.ResolveInterceptingRoute(path); interceptRoute != nil {
+			route = interceptRoute
+		}
 	}
 
 	// Check guards
@@ -285,9 +298,12 @@ func (r *Router) Navigate(path string) error {
 	return nil
 }
 
-// matchRoute finds a matching route for the path
+// matchRoute finds a matching route for the path (skips intercepting routes)
 func (r *Router) matchRoute(path string) (*Route, map[string]string) {
 	for _, route := range r.routes {
+		if route.IsIntercepting {
+			continue // skip intercepting routes in normal matching
+		}
 		if route.Regex == nil {
 			if route.Path == path {
 				return route, make(map[string]string)
@@ -308,6 +324,27 @@ func (r *Router) matchRoute(path string) (*Route, map[string]string) {
 	}
 
 	return nil, nil
+}
+
+// ResolveInterceptingRoute checks if the target path has an intercepting
+// route registered and returns it if client-side navigation should use
+// the intercepted version. It matches the InterceptTarget against the path
+// using regex patterns (for parameterized routes) or exact string matching.
+func (r *Router) ResolveInterceptingRoute(path string) *Route {
+	for _, route := range r.routes {
+		if !route.IsIntercepting {
+			continue
+		}
+		// Check exact match against InterceptTarget
+		if route.InterceptTarget == path {
+			return route
+		}
+		// Check regex match for parameterized intercept targets
+		if route.Regex != nil && route.Regex.MatchString(path) {
+			return route
+		}
+	}
+	return nil
 }
 
 // checkGuards runs all guards for a route
@@ -470,8 +507,9 @@ func (r *Router) AddRouteWithLayout(route *Route, parent *Route) *Router {
 	return r.AddRoute(route)
 }
 
-// Push navigates to a new route
+// Push navigates to a new route (client-side navigation)
 func (r *Router) Push(path string) error {
+	r.IsDirectNavigation = false
 	return r.Navigate(path)
 }
 
