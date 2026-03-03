@@ -4,6 +4,8 @@ package components
 
 import (
 	"fmt"
+	"strings"
+	"syscall/js"
 
 	"github.com/Nu11ified/golem/dom"
 	"github.com/Nu11ified/golem/src/app/models"
@@ -16,8 +18,7 @@ func Sidebar(ws *models.Workspace, activePageID string) *dom.Element {
 		dom.Class("hamburger-btn"),
 		dom.Text("\u2630"),
 		dom.OnClick(func() {
-			// Toggle sidebar open/close via class on body or sidebar element
-			dom.Alert("Toggle sidebar")
+			toggleSidebar()
 		}),
 	)
 
@@ -25,8 +26,7 @@ func Sidebar(ws *models.Workspace, activePageID string) *dom.Element {
 	overlay := dom.Div(
 		dom.Class("sidebar-overlay"),
 		dom.OnClick(func() {
-			// Close sidebar when overlay is clicked
-			dom.Alert("Close sidebar")
+			closeSidebar()
 		}),
 	)
 
@@ -98,8 +98,9 @@ func PageTreeItem(page *models.Page, depth int, activePageID string, ws *models.
 		dom.Span(dom.Class("page-tree-item-icon"), dom.Text(page.Icon)),
 		dom.Span(dom.Class("page-tree-item-title"), dom.Text(page.Title)),
 		dom.OnClick(func() {
-			// Navigate to this page
+			// Navigate to this page and close sidebar on mobile
 			_ = pageID
+			closeSidebar()
 		}),
 	)
 
@@ -116,4 +117,53 @@ func PageTreeItem(page *models.Page, depth int, activePageID string, ws *models.
 	}
 
 	return container
+}
+
+// toggleSidebar toggles the sidebar open/close state on mobile.
+// It adds or removes the "sidebar-open" class on the sidebar element and
+// the "sidebar-overlay-visible" class on the overlay element.
+func toggleSidebar() {
+	doc := js.Global().Get("document")
+
+	sidebarEl := doc.Call("querySelector", ".sidebar")
+	if sidebarEl.IsNull() || sidebarEl.IsUndefined() {
+		return
+	}
+
+	overlayEl := doc.Call("querySelector", ".sidebar-overlay")
+
+	className := sidebarEl.Get("className").String()
+	if strings.Contains(className, "sidebar-open") {
+		// Close sidebar
+		sidebarEl.Set("className", strings.TrimSpace(strings.ReplaceAll(className, "sidebar-open", "")))
+		if !overlayEl.IsNull() && !overlayEl.IsUndefined() {
+			ovClass := overlayEl.Get("className").String()
+			overlayEl.Set("className", strings.TrimSpace(strings.ReplaceAll(ovClass, "sidebar-overlay-visible", "")))
+		}
+	} else {
+		// Open sidebar
+		sidebarEl.Set("className", className+" sidebar-open")
+		if !overlayEl.IsNull() && !overlayEl.IsUndefined() {
+			ovClass := overlayEl.Get("className").String()
+			overlayEl.Set("className", ovClass+" sidebar-overlay-visible")
+		}
+	}
+}
+
+// closeSidebar removes the sidebar-open class and hides the overlay,
+// used when clicking the overlay or navigating to a page on mobile.
+func closeSidebar() {
+	doc := js.Global().Get("document")
+
+	sidebarEl := doc.Call("querySelector", ".sidebar")
+	if !sidebarEl.IsNull() && !sidebarEl.IsUndefined() {
+		className := sidebarEl.Get("className").String()
+		sidebarEl.Set("className", strings.TrimSpace(strings.ReplaceAll(className, "sidebar-open", "")))
+	}
+
+	overlayEl := doc.Call("querySelector", ".sidebar-overlay")
+	if !overlayEl.IsNull() && !overlayEl.IsUndefined() {
+		ovClass := overlayEl.Get("className").String()
+		overlayEl.Set("className", strings.TrimSpace(strings.ReplaceAll(ovClass, "sidebar-overlay-visible", "")))
+	}
 }

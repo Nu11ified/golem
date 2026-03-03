@@ -110,3 +110,28 @@ func TestSidebarHasHamburgerButton(t *testing.T) {
 		t.Error("missing hamburger button for mobile")
 	}
 }
+
+func TestSidebarHasOverlay(t *testing.T) {
+	ws := models.NewWorkspace()
+	sidebar := components.Sidebar(ws, "")
+	html := dom.RenderToHTML(sidebar)
+	if !strings.Contains(html, "sidebar-overlay") {
+		t.Error("missing sidebar overlay for mobile")
+	}
+}
+
+func TestSidebarMobileClasses(t *testing.T) {
+	ws := models.NewWorkspace()
+	sidebar := components.Sidebar(ws, "")
+	html := dom.RenderToHTML(sidebar)
+	// Verify the sidebar wrapper contains all needed mobile elements
+	if !strings.Contains(html, "hamburger-btn") {
+		t.Error("missing hamburger button")
+	}
+	if !strings.Contains(html, "sidebar-overlay") {
+		t.Error("missing sidebar overlay")
+	}
+	if !strings.Contains(html, "sidebar") {
+		t.Error("missing sidebar class")
+	}
+}
