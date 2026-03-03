@@ -14,14 +14,33 @@ import (
 
 	"github.com/Nu11ified/golem/internal/config"
 	"github.com/Nu11ified/golem/internal/functions"
+	"github.com/Nu11ified/golem/internal/hmr"
 	"nhooyr.io/websocket"
 )
+
+// DevCompiler wraps the Server's build methods to implement the HMRCompiler interface.
+type DevCompiler struct {
+	server *Server
+}
+
+// CompileModule compiles a single page module. For now this delegates to a
+// full rebuild, but the interface allows future optimization.
+func (dc *DevCompiler) CompileModule(modulePath string) error {
+	return dc.server.buildDevWasm()
+}
+
+// CompileAll performs a full rebuild of all WASM modules.
+func (dc *DevCompiler) CompileAll() error {
+	return dc.server.buildDevWasm()
+}
 
 // Server represents the development server
 type Server struct {
 	config      *config.Config
 	registry    *functions.Registry
 	broadcaster *Broadcaster
+	hmrManager  *HMRManager
+	watcher     *FileWatcher
 }
 
 // NewServer creates a new development server
@@ -42,9 +61,21 @@ func (s *Server) Start() error {
 		log.Printf("Warning: Failed to initialize function registry: %v", err)
 	}
 
-	// Set up file watcher for hot reload
+	// Set up HMR components for hot reload
 	if s.config.Dev.HotReload {
-		go s.watchFiles()
+		s.broadcaster = NewBroadcaster()
+
+		splitter := hmr.NewModuleSplitter("src/app", ".golem/build", "")
+		compiler := &DevCompiler{server: s}
+
+		s.hmrManager = NewHMRManager(splitter, s.broadcaster, compiler)
+
+		s.watcher = NewFileWatcher("src", 500*time.Millisecond)
+		s.watcher.OnChange(func(path string) {
+			s.hmrManager.HandleFileChange(path)
+		})
+		go s.watcher.Start()
+		log.Println("File watcher started with HMR")
 	}
 
 	// Start gRPC server in background for development
@@ -144,6 +175,7 @@ func (s *Server) Start() error {
 
 	// WebSocket endpoint for hot reload
 	if s.config.Dev.HotReload {
+		mux.HandleFunc("/golem-hmr", s.handleWebSocket)
 		mux.HandleFunc("/ws", s.handleWebSocket)
 	}
 
@@ -593,6 +625,16 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		case <-ctx.Done():
 			return
 		}
+	}
+}
+
+// Stop gracefully stops the development server's background components.
+func (s *Server) Stop() {
+	if s.hmrManager != nil {
+		s.hmrManager.Stop()
+	}
+	if s.watcher != nil {
+		s.watcher.Stop()
 	}
 }
 
