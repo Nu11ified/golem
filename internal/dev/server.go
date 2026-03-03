@@ -19,15 +19,17 @@ import (
 
 // Server represents the development server
 type Server struct {
-	config   *config.Config
-	registry *functions.Registry
+	config      *config.Config
+	registry    *functions.Registry
+	broadcaster *Broadcaster
 }
 
 // NewServer creates a new development server
 func NewServer(config *config.Config) *Server {
 	return &Server{
-		config:   config,
-		registry: functions.NewRegistry(),
+		config:      config,
+		registry:    functions.NewRegistry(),
+		broadcaster: NewBroadcaster(),
 	}
 }
 
@@ -306,7 +308,7 @@ func (s *Server) generateDevFiles() error {
 	}
 
 	// Generate development HTML with hot reload
-	html := s.generateDevHTML()
+	html := s.GenerateDevHTML()
 	htmlPath := filepath.Join(devDir, "index.html")
 	if err := os.WriteFile(htmlPath, []byte(html), 0644); err != nil {
 		return err
@@ -316,7 +318,9 @@ func (s *Server) generateDevFiles() error {
 	return s.buildDevWasm()
 }
 
-func (s *Server) generateDevHTML() string {
+// GenerateDevHTML produces the development HTML page that loads the WASM
+// application and optionally includes the hot-reload WebSocket script.
+func (s *Server) GenerateDevHTML() string {
 	hotReloadScript := ""
 	if s.config.Dev.HotReload {
 		hotReloadScript = `
@@ -551,31 +555,52 @@ func (s *Server) watchFiles() {
 		start := time.Now()
 		if err := s.buildDevWasm(); err != nil {
 			log.Printf("Build failed: %v", err)
+			s.broadcastError(err.Error())
 			return
 		}
 		log.Printf("Rebuild completed in %v", time.Since(start))
+		s.broadcastReload()
 	})
 	watcher.Start()
 }
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	// This is a basic WebSocket handler to prevent connection errors in the browser.
-	// Full hot-reload logic is not implemented yet.
 	c, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		log.Printf("could not upgrade to websocket: %v", err)
 		return
 	}
-	defer c.Close(websocket.StatusInternalError, "internal error")
+	defer c.Close(websocket.StatusNormalClosure, "connection closed")
 
 	log.Println("WebSocket client connected.")
 
-	// Keep the connection open but do nothing.
-	// This prevents the connection from being immediately closed and causing errors.
+	// Register this client with the broadcaster.
+	ch := make(chan string, 16)
+	id := s.broadcaster.AddClient(ch)
+	defer s.broadcaster.RemoveClient(id)
+
+	ctx := r.Context()
+
+	// Write loop: read messages from the broadcast channel and send them
+	// to this WebSocket connection.
 	for {
-		_, _, err := c.Read(r.Context())
-		if err != nil {
-			break
+		select {
+		case msg := <-ch:
+			if err := c.Write(ctx, websocket.MessageText, []byte(msg)); err != nil {
+				return
+			}
+		case <-ctx.Done():
+			return
 		}
 	}
+}
+
+// broadcastReload sends a reload message to all connected WebSocket clients.
+func (s *Server) broadcastReload() {
+	s.broadcaster.SendReload()
+}
+
+// broadcastError sends a JSON error message to all connected WebSocket clients.
+func (s *Server) broadcastError(msg string) {
+	s.broadcaster.SendError(msg)
 }
