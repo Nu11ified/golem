@@ -62,3 +62,4 @@ coverage
 # Temporary folders
 tmp/
 temp/
+.claude/worktrees/

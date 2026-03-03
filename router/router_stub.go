@@ -10,7 +10,7 @@ import (
 	"github.com/Nu11ified/golem/dom"
 )
 
-// Stub implementations for non-WASM builds
+// Route represents a single route
 type Route struct {
 	Path            string
 	Component       func(params map[string]string) *dom.Element
@@ -31,8 +31,10 @@ type Route struct {
 	InterceptTarget string
 }
 
+// Guard represents a route guard
 type Guard func(to *Route, from *Route, params map[string]string) bool
 
+// Router manages routing
 type Router struct {
 	routes             []*Route
 	currentRoute       *Route
@@ -47,6 +49,7 @@ type Router struct {
 	IsDirectNavigation bool // true when the page was loaded directly (not via client-side nav)
 }
 
+// RouterMode defines routing modes
 type RouterMode int
 
 const (
@@ -54,6 +57,7 @@ const (
 	HistoryMode
 )
 
+// LinkComponent for navigation
 type LinkComponent struct {
 	To     string
 	Class  string
@@ -61,15 +65,18 @@ type LinkComponent struct {
 	Router *Router
 }
 
+// TransitionHook is a route transition hook
 type TransitionHook func(to *Route, from *Route, next func())
 
+// Transition manages route transitions
 type Transition struct {
 	hooks []TransitionHook
 }
 
+// Guards provides common route guards
 type Guards struct{}
 
-// Stub functions
+// NewRouter creates a new router instance
 func NewRouter() *Router {
 	return &Router{
 		routes:             make([]*Route, 0),
@@ -97,13 +104,81 @@ func (r *Router) AddSimpleRoute(path string, component func(params map[string]st
 	})
 }
 func (r *Router) RouteWithName(name, path string, component func(params map[string]string) *dom.Element) *Router {
+	return r.AddRoute(&Route{
+		Name:      name,
+		Path:      path,
+		Component: component,
+	})
+}
+
+// RouteGroup creates a route group with shared guards
+func (r *Router) RouteGroup(prefix string, guards []Guard, routes []*Route) *Router {
+	for _, route := range routes {
+		route.Path = prefix + route.Path
+		route.Guards = append(guards, route.Guards...)
+		r.AddRoute(route)
+	}
 	return r
 }
-func (r *Router) RouteGroup(prefix string, guards []Guard, routes []*Route) *Router { return r }
-func (r *Router) BeforeEach(guard Guard) *Router                                    { return r }
-func (r *Router) AfterEach(hook func(*Route, *Route)) *Router                       { return r }
-func (r *Router) NotFound(handler func() *dom.Element) *Router                      { return r }
-func (r *Router) OnError(handler func(error) *dom.Element) *Router                  { return r }
+
+func (r *Router) BeforeEach(guard Guard) *Router                   { return r }
+func (r *Router) AfterEach(hook func(*Route, *Route)) *Router     { return r }
+
+// NotFound sets the 404 handler
+func (r *Router) NotFound(handler func() *dom.Element) *Router {
+	r.notFoundHandler = handler
+	return r
+}
+
+// OnError sets the error handler
+func (r *Router) OnError(handler func(error) *dom.Element) *Router {
+	r.errorHandler = handler
+	return r
+}
+
+// MatchRoute finds a matching route for the path. Exported for SSR use.
+// Skips intercepting routes (same as matchRoute but exported).
+func (r *Router) MatchRoute(path string) (*Route, map[string]string) {
+	for _, route := range r.routes {
+		if route.IsIntercepting {
+			continue
+		}
+		if route.Regex == nil {
+			if route.Path == path {
+				return route, make(map[string]string)
+			}
+			continue
+		}
+
+		matches := route.Regex.FindStringSubmatch(path)
+		if matches != nil {
+			params := make(map[string]string)
+			for i, paramName := range route.ParamNames {
+				if i+1 < len(matches) {
+					params[paramName] = matches[i+1]
+				}
+			}
+			return route, params
+		}
+	}
+
+	return nil, nil
+}
+
+// GetNotFoundHandler returns the 404 handler
+func (r *Router) GetNotFoundHandler() func() *dom.Element {
+	return r.notFoundHandler
+}
+
+// GetErrorHandler returns the error handler
+func (r *Router) GetErrorHandler() func(error) *dom.Element {
+	return r.errorHandler
+}
+
+// GetRoutes returns the registered routes
+func (r *Router) GetRoutes() []*Route {
+	return r.routes
+}
 
 // BuildLayoutChain walks the parent chain of a route and wraps the content
 // in each Layout. The innermost layout wraps first, then the parent, etc.
@@ -352,13 +427,69 @@ func (g *Guards) ConfirmLeave(message string) Guard {
 
 var DefaultRouter = NewRouter()
 
-func AddRoute(path string, component func(params map[string]string) *dom.Element) {}
-func Navigate(path string) error                                                  { return fmt.Errorf("routing only available in WebAssembly build") }
-func Push(path string) error                                                      { return fmt.Errorf("routing only available in WebAssembly build") }
-func Back()                                                                       {}
-func Forward()                                                                    {}
-func Start()                                                                      { fmt.Println("Router only available in WebAssembly build") }
-func CreateLink(to, text string) *dom.Element                                     { return dom.A(dom.Text(text)) }
+func AddRoute(path string, component func(params map[string]string) *dom.Element) {
+	DefaultRouter.AddSimpleRoute(path, component)
+}
+func Navigate(path string) error { return fmt.Errorf("routing only available in WebAssembly build") }
+func Push(path string) error     { return fmt.Errorf("routing only available in WebAssembly build") }
+func Back()                      {}
+func Forward()                   {}
+func Start()                     { fmt.Println("Router only available in WebAssembly build") }
+func CreateLink(to, text string) *dom.Element { return dom.A(dom.Text(text)) }
 func CreateLinkWithClass(to, text, class string) *dom.Element {
 	return dom.A(dom.Class(class), dom.Text(text))
+}
+
+// BuildLayoutChain wraps content in the route's layout and any parent layouts.
+// It walks up the route hierarchy applying layouts from innermost to outermost.
+func BuildLayoutChain(route *Route, content *dom.Element) *dom.Element {
+	if route == nil || route.Layout == nil {
+		return content
+	}
+	return route.Layout(content)
+}
+
+// RenderWithErrorBoundary renders the route component, catching panics and
+// falling back to the error handler if one is provided.
+func RenderWithErrorBoundary(route *Route, params map[string]string) (result *dom.Element, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			var renderErr error
+			switch v := r.(type) {
+			case error:
+				renderErr = v
+			default:
+				renderErr = fmt.Errorf("%v", v)
+			}
+			if route.ErrorHandler != nil {
+				result = route.ErrorHandler(renderErr)
+				err = nil
+			} else {
+				err = renderErr
+			}
+		}
+	}()
+
+	if route.Component == nil {
+		return nil, fmt.Errorf("route %s has no component", route.Path)
+	}
+
+	result = route.Component(params)
+	return result, nil
+}
+
+// RenderParallelSlots renders all parallel slot components for a route and
+// returns them as a map of slot name to rendered element.
+func RenderParallelSlots(route *Route, params map[string]string) map[string]*dom.Element {
+	if route.ParallelSlots == nil {
+		return nil
+	}
+
+	results := make(map[string]*dom.Element, len(route.ParallelSlots))
+	for name, slotRoute := range route.ParallelSlots {
+		if slotRoute != nil && slotRoute.Component != nil {
+			results[name] = slotRoute.Component(params)
+		}
+	}
+	return results
 }
